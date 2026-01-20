@@ -1,0 +1,142 @@
+.tree-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tree-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tree-search input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.tree-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha);
+}
+
+.tree-nodes {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.tree-node-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-radius: 6px;
+  margin: 2px 8px;
+}
+
+.tree-node-content:hover {
+  background: var(--bg-hover);
+}
+
+.tree-node-content.schedule-item {
+  color: var(--accent);
+}
+
+.tree-node-content.schedule-item:hover {
+  background: var(--accent-alpha);
+}
+
+.expand-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+  color: var(--text-secondary);
+  width: 12px;
+  text-align: center;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.node-icon {
+  font-size: 16px;
+}
+
+.node-name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-children {
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tree-loading,
+.tree-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  gap: 16px;
+}
+
+.tree-error button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.tree-error button:hover {
+  opacity: 0.9;
+}
+
+.tree-node-content.hybrid-item {
+  color: var(--text-primary);
+}
+
+.tree-node-content.hybrid-item:hover {
+  background: var(--bg-hover);
+}
+
+.schedule-btn {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.7;
+}
+
+.schedule-btn:hover {
+  opacity: 1;
+  background: var(--accent-alpha);
+}
