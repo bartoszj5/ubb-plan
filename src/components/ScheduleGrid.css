@@ -142,7 +142,7 @@
 .day-events {
   position: relative;
   flex: 1;
-  height: calc(14 * 60px); /* 14 hours * 60px */
+  height: calc(13 * 60px); /* 13 hours * 60px (8:00-21:00) */
   background: repeating-linear-gradient(
     to bottom,
     var(--bg-primary) 0px,
@@ -154,10 +154,8 @@
 
 .event-block {
   position: absolute;
-  left: 2px;
-  right: 2px;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -165,7 +163,10 @@
   font-size: 11px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-sizing: border-box;
+  gap: 1px;
 }
 
 .event-block:hover {
