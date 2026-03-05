@@ -13,7 +13,10 @@ interface ScheduleGridProps {
 }
 
 const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7:00 - 20:00
+const START_HOUR = 8;
+const END_HOUR = 21;
+const TOTAL_HOURS = END_HOUR - START_HOUR; // 13 hours
+const HOURS = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR); // 8:00 - 20:00
 
 const COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
@@ -55,47 +58,125 @@ export default function ScheduleGrid({
     });
   }, [weekStart]);
 
+  /* Logic for grouping overlapping events */
   const eventsByDay = useMemo(() => {
-    const map: Map<number, ScheduleEvent[]> = new Map();
+    const map: Map<number, (ScheduleEvent & { style: React.CSSProperties })[]> = new Map();
     
+    // 1. Group raw events by day
+    const rawEventsByDay: Map<number, ScheduleEvent[]> = new Map();
     events.forEach(event => {
       const eventDate = new Date(event.start);
       const dayOfWeek = eventDate.getDay();
-      // Convert Sunday (0) to 6, Monday (1) to 0, etc.
       const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
       
-      if (!map.has(dayIndex)) {
-        map.set(dayIndex, []);
+      if (!rawEventsByDay.has(dayIndex)) {
+        rawEventsByDay.set(dayIndex, []);
       }
-      map.get(dayIndex)!.push(event);
+      rawEventsByDay.get(dayIndex)!.push(event);
+    });
+    
+    // 2. Process each day to calculate layout
+    rawEventsByDay.forEach((dayEvents, dayIndex) => {
+      // Sort by start time
+      const sorted = [...dayEvents].sort((a, b) => 
+        new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
+      
+      // Group into overlapping clusters
+      const clusters: ScheduleEvent[][] = [];
+      let currentCluster: ScheduleEvent[] = [];
+      let clusterEnd = 0;
+
+      sorted.forEach(ev => {
+        const start = new Date(ev.start).getTime();
+        const end = new Date(ev.end).getTime();
+        
+        if (currentCluster.length === 0) {
+          currentCluster.push(ev);
+          clusterEnd = end;
+        } else {
+          // If this event starts before the current cluster ends, it's part of the cluster
+          // Note: Using strict < to allow adjacent events to NOT overlap
+          if (start < clusterEnd) {
+            currentCluster.push(ev);
+            clusterEnd = Math.max(clusterEnd, end);
+          } else {
+            clusters.push(currentCluster);
+            currentCluster = [ev];
+            clusterEnd = end;
+          }
+        }
+      });
+      if (currentCluster.length > 0) clusters.push(currentCluster);
+
+      // Process clusters to assign columns
+      const processedEvents: (ScheduleEvent & { style: React.CSSProperties })[] = [];
+      
+      clusters.forEach(cluster => {
+        const columns: ScheduleEvent[][] = [];
+        const eventCols: Map<ScheduleEvent, number> = new Map();
+
+        cluster.forEach(ev => {
+            const start = new Date(ev.start).getTime();
+            // Find first column where this event fits
+            let colIndex = columns.findIndex(col => {
+                const lastEvent = col[col.length - 1];
+                return new Date(lastEvent.end).getTime() <= start;
+            });
+            
+            if (colIndex === -1) {
+                colIndex = columns.length;
+                columns.push([]);
+            }
+            
+            columns[colIndex].push(ev);
+            eventCols.set(ev, colIndex);
+        });
+        
+        const totalCols = columns.length;
+        
+        cluster.forEach(ev => {
+          const col = eventCols.get(ev) || 0;
+          
+          /* Style Calculation */
+          const start = new Date(ev.start);
+          const end = new Date(ev.end);
+          
+          // Use LOCAL time
+          const startHour = start.getHours() + start.getMinutes() / 60;
+          const endHour = end.getHours() + end.getMinutes() / 60;
+          
+          const top = ((startHour - START_HOUR) / TOTAL_HOURS) * 100;
+          const height = ((endHour - startHour) / TOTAL_HOURS) * 100;
+          
+          const leftPct = (col / totalCols) * 100;
+          const widthPct = 100 / totalCols;
+
+          const style: React.CSSProperties = {
+            top: `${top}%`,
+            height: `calc(${height}% - 2px)`,
+            backgroundColor: getEventColor(ev.subject),
+            left: `calc(${leftPct}% + 2px)`,
+            width: `calc(${widthPct}% - 4px)`,
+            zIndex: 1
+          };
+          
+          processedEvents.push({ ...ev, style });
+        });
+      });
+
+      map.set(dayIndex, processedEvents);
     });
     
     return map;
   }, [events]);
-
-  const getEventStyle = (event: ScheduleEvent) => {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    
-    const startHour = start.getUTCHours() + start.getUTCMinutes() / 60;
-    const endHour = end.getUTCHours() + end.getUTCMinutes() / 60;
-    
-    const top = ((startHour - 7) / 14) * 100;
-    const height = ((endHour - startHour) / 14) * 100;
-    
-    return {
-      top: `${top}%`,
-      height: `${height}%`,
-      backgroundColor: getEventColor(event.subject),
-    };
-  };
 
   const formatEventTime = (event: ScheduleEvent) => {
     const start = new Date(event.start);
     const end = new Date(event.end);
     
     const format = (d: Date) => 
-      `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+      `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
     
     return `${format(start)} - ${format(end)}`;
   };
@@ -141,7 +222,7 @@ export default function ScheduleGrid({
                 <div
                   key={i}
                   className="event-block"
-                  style={getEventStyle(event)}
+                  style={event.style}
                   title={`${event.summary}\n${formatEventTime(event)}`}
                 >
                   <span className="event-subject">{event.subject}</span>

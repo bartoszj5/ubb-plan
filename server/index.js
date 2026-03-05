@@ -232,7 +232,9 @@ function parseICSDate(dateStr) {
     const minute = dateStr.substring(11, 13);
     const second = dateStr.substring(13, 15);
 
-    return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+    // Preserve Z suffix so the browser correctly converts UTC to local time
+    const suffix = dateStr.endsWith('Z') ? 'Z' : '';
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}${suffix}`;
 }
 
 app.listen(PORT, () => {
