@@ -19,8 +19,8 @@ const TOTAL_HOURS = END_HOUR - START_HOUR; // 13 hours
 const HOURS = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR); // 8:00 - 20:00
 
 const COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
-  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'
+  '#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED',
+  '#DB2777', '#0891B2', '#4D7C0F', '#C2410C', '#4338CA'
 ];
 
 function getEventColor(subject: string): string {
@@ -152,14 +152,14 @@ export default function ScheduleGrid({
           const leftPct = (col / totalCols) * 100;
           const widthPct = 100 / totalCols;
 
-          const style: React.CSSProperties = {
+          const style = {
             top: `${top}%`,
             height: `calc(${height}% - 2px)`,
-            backgroundColor: getEventColor(ev.subject),
             left: `calc(${leftPct}% + 2px)`,
             width: `calc(${widthPct}% - 4px)`,
-            zIndex: 1
-          };
+            zIndex: 1,
+            '--event-color': getEventColor(ev.subject),
+          } as React.CSSProperties;
           
           processedEvents.push({ ...ev, style });
         });

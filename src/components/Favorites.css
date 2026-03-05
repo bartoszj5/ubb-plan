@@ -3,50 +3,58 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: 28px 16px;
   color: var(--text-secondary);
   text-align: center;
 }
 
 .favorites-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
+  font-size: 28px;
+  margin-bottom: 10px;
+  opacity: 0.6;
 }
 
 .favorites-empty p {
-  margin: 0 0 8px;
-  font-size: 14px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .favorites-empty small {
   font-size: 12px;
-  opacity: 0.7;
+  opacity: 0.6;
+  line-height: 1.4;
 }
 
 .favorites-list {
-  padding: 12px;
+  padding: 12px 14px;
 }
 
 .favorites-list h3 {
-  margin: 0 0 12px;
-  font-size: 14px;
+  margin: 0 0 10px;
+  font-family: 'Bricolage Grotesque', serif;
+  font-size: 12px;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .favorite-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  margin-bottom: 6px;
+  padding: 9px 12px;
+  margin-bottom: 4px;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   transition: all 0.2s;
 }
 
 .favorite-item:hover {
   background: var(--bg-hover);
+  border-color: var(--border-color);
 }
 
 .favorite-info {
@@ -57,7 +65,7 @@
 
 .favorite-name {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -73,6 +81,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 2px;
+  opacity: 0.8;
 }
 
 .remove-btn {
@@ -80,13 +89,20 @@
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px 8px;
-  font-size: 14px;
-  opacity: 0.6;
+  padding: 4px 6px;
+  font-size: 12px;
+  opacity: 0;
   transition: all 0.2s;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.favorite-item:hover .remove-btn {
+  opacity: 0.6;
 }
 
 .remove-btn:hover {
-  opacity: 1;
-  color: #EF4444;
+  opacity: 1 !important;
+  color: #DC2626;
+  background: rgba(220, 38, 38, 0.08);
 }
