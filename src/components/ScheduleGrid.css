@@ -247,7 +247,7 @@
 
 .day-events {
   position: relative;
-  flex: 1;
+  flex: none;
   height: calc(13 * 60px);
   background: repeating-linear-gradient(
     to bottom,
@@ -513,6 +513,10 @@
   }
 
   .day-column .day-header {
+    display: none;
+  }
+
+  .time-header {
     display: none;
   }
 
