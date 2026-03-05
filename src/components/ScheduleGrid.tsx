@@ -1,22 +1,27 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { ScheduleEvent } from '../types';
+import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
+import EventModal from './EventModal';
 import './ScheduleGrid.css';
 
 interface ScheduleGridProps {
   events: ScheduleEvent[];
   weekStart: Date;
   groupName: string;
+  groupPath?: string[];
   onPrevWeek: () => void;
   onNextWeek: () => void;
+  onGoToToday: () => void;
   onToggleFavorite: () => void;
   isFavorite: boolean;
 }
 
-const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
+const DAYS = ['Poniedzialek', 'Wtorek', 'Sroda', 'Czwartek', 'Piatek', 'Sobota', 'Niedziela'];
+const DAY_ABBR = ['Pn', 'Wt', 'Sr', 'Cz', 'Pt', 'Sb', 'Nd'];
 const START_HOUR = 8;
 const END_HOUR = 21;
-const TOTAL_HOURS = END_HOUR - START_HOUR; // 13 hours
-const HOURS = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR); // 8:00 - 20:00
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+const HOURS = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR);
 
 const COLORS = [
   '#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED',
@@ -41,15 +46,29 @@ function formatWeekRange(start: Date): string {
   return `${formatDate(start)} - ${formatDate(end)}`;
 }
 
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
 export default function ScheduleGrid({
   events,
   weekStart,
   groupName,
+  groupPath,
   onPrevWeek,
   onNextWeek,
+  onGoToToday,
   onToggleFavorite,
   isFavorite
 }: ScheduleGridProps) {
+  const [showWeekend, setShowWeekend] = useState(false);
+  const [modalEvent, setModalEvent] = useState<ScheduleEvent | null>(null);
+  const [timeIndicatorPos, setTimeIndicatorPos] = useState<number | null>(null);
+
+  const today = useMemo(() => new Date(), []);
+
   const weekDates = useMemo(() => {
     return DAYS.map((_, i) => {
       const date = new Date(weekStart);
@@ -58,31 +77,70 @@ export default function ScheduleGrid({
     });
   }, [weekStart]);
 
+  const todayIndex = useMemo(() => {
+    return weekDates.findIndex(d => isSameDay(d, today));
+  }, [weekDates, today]);
+
+  // Mobile day view
+  const [mobileViewDay, setMobileViewDay] = useState(() => {
+    const now = new Date();
+    const day = now.getDay();
+    return day === 0 ? 6 : day - 1;
+  });
+
+  // Reset mobile day when week changes
+  useEffect(() => {
+    if (todayIndex >= 0) {
+      setMobileViewDay(todayIndex);
+    } else {
+      setMobileViewDay(0);
+    }
+  }, [weekStart, todayIndex]);
+
+  // Current time indicator
+  useEffect(() => {
+    const updateTimeIndicator = () => {
+      if (todayIndex < 0) {
+        setTimeIndicatorPos(null);
+        return;
+      }
+      const now = new Date();
+      const hours = now.getHours() + now.getMinutes() / 60;
+      if (hours >= START_HOUR && hours <= END_HOUR) {
+        setTimeIndicatorPos(((hours - START_HOUR) / TOTAL_HOURS) * 100);
+      } else {
+        setTimeIndicatorPos(null);
+      }
+    };
+
+    updateTimeIndicator();
+    const interval = setInterval(updateTimeIndicator, 60000);
+    return () => clearInterval(interval);
+  }, [todayIndex]);
+
+  const displayDays = showWeekend ? 7 : 5;
+
   /* Logic for grouping overlapping events */
   const eventsByDay = useMemo(() => {
-    const map: Map<number, (ScheduleEvent & { style: React.CSSProperties })[]> = new Map();
-    
-    // 1. Group raw events by day
+    const map: Map<number, (ScheduleEvent & { style: React.CSSProperties; durationHours: number })[]> = new Map();
+
     const rawEventsByDay: Map<number, ScheduleEvent[]> = new Map();
     events.forEach(event => {
       const eventDate = new Date(event.start);
       const dayOfWeek = eventDate.getDay();
       const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      
+
       if (!rawEventsByDay.has(dayIndex)) {
         rawEventsByDay.set(dayIndex, []);
       }
       rawEventsByDay.get(dayIndex)!.push(event);
     });
-    
-    // 2. Process each day to calculate layout
+
     rawEventsByDay.forEach((dayEvents, dayIndex) => {
-      // Sort by start time
-      const sorted = [...dayEvents].sort((a, b) => 
+      const sorted = [...dayEvents].sort((a, b) =>
         new Date(a.start).getTime() - new Date(b.start).getTime()
       );
-      
-      // Group into overlapping clusters
+
       const clusters: ScheduleEvent[][] = [];
       let currentCluster: ScheduleEvent[] = [];
       let clusterEnd = 0;
@@ -90,13 +148,11 @@ export default function ScheduleGrid({
       sorted.forEach(ev => {
         const start = new Date(ev.start).getTime();
         const end = new Date(ev.end).getTime();
-        
+
         if (currentCluster.length === 0) {
           currentCluster.push(ev);
           clusterEnd = end;
         } else {
-          // If this event starts before the current cluster ends, it's part of the cluster
-          // Note: Using strict < to allow adjacent events to NOT overlap
           if (start < clusterEnd) {
             currentCluster.push(ev);
             clusterEnd = Math.max(clusterEnd, end);
@@ -109,46 +165,39 @@ export default function ScheduleGrid({
       });
       if (currentCluster.length > 0) clusters.push(currentCluster);
 
-      // Process clusters to assign columns
-      const processedEvents: (ScheduleEvent & { style: React.CSSProperties })[] = [];
-      
+      const processedEvents: (ScheduleEvent & { style: React.CSSProperties; durationHours: number })[] = [];
+
       clusters.forEach(cluster => {
         const columns: ScheduleEvent[][] = [];
         const eventCols: Map<ScheduleEvent, number> = new Map();
 
         cluster.forEach(ev => {
-            const start = new Date(ev.start).getTime();
-            // Find first column where this event fits
-            let colIndex = columns.findIndex(col => {
-                const lastEvent = col[col.length - 1];
-                return new Date(lastEvent.end).getTime() <= start;
-            });
-            
-            if (colIndex === -1) {
-                colIndex = columns.length;
-                columns.push([]);
-            }
-            
-            columns[colIndex].push(ev);
-            eventCols.set(ev, colIndex);
+          const start = new Date(ev.start).getTime();
+          let colIndex = columns.findIndex(col => {
+            const lastEvent = col[col.length - 1];
+            return new Date(lastEvent.end).getTime() <= start;
+          });
+
+          if (colIndex === -1) {
+            colIndex = columns.length;
+            columns.push([]);
+          }
+
+          columns[colIndex].push(ev);
+          eventCols.set(ev, colIndex);
         });
-        
+
         const totalCols = columns.length;
-        
+
         cluster.forEach(ev => {
           const col = eventCols.get(ev) || 0;
-          
-          /* Style Calculation */
           const start = new Date(ev.start);
           const end = new Date(ev.end);
-          
-          // Use LOCAL time
           const startHour = start.getHours() + start.getMinutes() / 60;
           const endHour = end.getHours() + end.getMinutes() / 60;
-          
+
           const top = ((startHour - START_HOUR) / TOTAL_HOURS) * 100;
           const height = ((endHour - startHour) / TOTAL_HOURS) * 100;
-          
           const leftPct = (col / totalCols) * 100;
           const widthPct = 100 / totalCols;
 
@@ -160,45 +209,82 @@ export default function ScheduleGrid({
             zIndex: 1,
             '--event-color': getEventColor(ev.subject),
           } as React.CSSProperties;
-          
-          processedEvents.push({ ...ev, style });
+
+          processedEvents.push({ ...ev, style, durationHours: endHour - startHour });
         });
       });
 
       map.set(dayIndex, processedEvents);
     });
-    
+
     return map;
   }, [events]);
 
   const formatEventTime = (event: ScheduleEvent) => {
     const start = new Date(event.start);
     const end = new Date(event.end);
-    
-    const format = (d: Date) => 
+    const format = (d: Date) =>
       `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-    
     return `${format(start)} - ${format(end)}`;
   };
+
+  const breadcrumb = groupPath && groupPath.length > 1
+    ? groupPath.slice(0, -1).join(' > ')
+    : null;
 
   return (
     <div className="schedule-grid">
       <div className="schedule-header">
         <div className="schedule-info">
-          <h2>{groupName}</h2>
-          <button 
+          <div>
+            <h2>{groupName}</h2>
+            {breadcrumb && <div className="breadcrumb">{breadcrumb}</div>}
+          </div>
+          <button
             className={`favorite-btn ${isFavorite ? 'is-favorite' : ''}`}
             onClick={onToggleFavorite}
-            title={isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+            aria-label={isFavorite ? 'Usun z ulubionych' : 'Dodaj do ulubionych'}
           >
-            {isFavorite ? '★' : '☆'}
+            {isFavorite ? <StarIcon size={18} /> : <StarOutlineIcon size={18} />}
           </button>
         </div>
-        <div className="week-navigation">
-          <button onClick={onPrevWeek} className="nav-btn">← Poprzedni</button>
-          <span className="week-label">{formatWeekRange(weekStart)}</span>
-          <button onClick={onNextWeek} className="nav-btn">Następny →</button>
+        <div className="schedule-controls">
+          <button
+            className="weekend-toggle"
+            onClick={() => setShowWeekend(w => !w)}
+            aria-label={showWeekend ? 'Ukryj weekend' : 'Pokaz weekend'}
+          >
+            {showWeekend ? 'Pn-Nd' : 'Pn-Pt'}
+          </button>
+          <div className="week-navigation">
+            <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzien">
+              <ChevronLeftIcon size={16} />
+            </button>
+            <button onClick={onGoToToday} className="today-btn">
+              Dzisiaj
+            </button>
+            <span className="week-label">{formatWeekRange(weekStart)}</span>
+            <button onClick={onNextWeek} className="nav-btn" aria-label="Nastepny tydzien">
+              <ChevronRightIcon size={16} />
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* Mobile day tabs */}
+      <div className="mobile-day-tabs" role="tablist">
+        {Array.from({ length: displayDays }, (_, i) => i).map(i => (
+          <button
+            key={i}
+            role="tab"
+            aria-selected={mobileViewDay === i}
+            className={`mobile-day-tab ${mobileViewDay === i ? 'active' : ''} ${todayIndex === i ? 'is-today' : ''}`}
+            onClick={() => setMobileViewDay(i)}
+          >
+            <span className="mobile-day-abbr">{DAY_ABBR[i]}</span>
+            <span className="mobile-day-date">{weekDates[i].getDate()}</span>
+          </button>
+        ))}
       </div>
 
       <div className="grid-container">
@@ -211,30 +297,50 @@ export default function ScheduleGrid({
           ))}
         </div>
 
-        {DAYS.map((day, dayIndex) => (
-          <div key={day} className="day-column">
+        {Array.from({ length: displayDays }, (_, i) => i).map(dayIndex => (
+          <div
+            key={DAYS[dayIndex]}
+            className={`day-column ${todayIndex === dayIndex ? 'today' : ''} ${dayIndex === mobileViewDay ? 'mobile-active' : ''}`}
+          >
             <div className="day-header">
-              <span className="day-name">{day}</span>
+              <span className="day-name">{DAYS[dayIndex]}</span>
               <span className="day-date">{formatDate(weekDates[dayIndex])}</span>
             </div>
             <div className="day-events">
+              {todayIndex === dayIndex && timeIndicatorPos !== null && (
+                <div
+                  className="time-indicator"
+                  style={{ top: `${timeIndicatorPos}%` }}
+                >
+                  <div className="time-indicator-dot" />
+                  <div className="time-indicator-line" />
+                </div>
+              )}
               {eventsByDay.get(dayIndex)?.map((event, i) => (
                 <div
                   key={i}
-                  className="event-block"
+                  className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''}`}
                   style={event.style}
                   title={`${event.summary}\n${formatEventTime(event)}`}
+                  onClick={() => setModalEvent(event)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalEvent(event); }}}
                 >
                   <span className="event-subject">{event.subject}</span>
                   <span className="event-type">{event.type}</span>
-                  <span className="event-room">{event.room}</span>
                   <span className="event-time">{formatEventTime(event)}</span>
+                  <span className="event-room">{event.room}</span>
                 </div>
               ))}
             </div>
           </div>
         ))}
       </div>
+
+      {modalEvent && (
+        <EventModal event={modalEvent} onClose={() => setModalEvent(null)} />
+      )}
     </div>
   );
 }
