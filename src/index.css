@@ -18,6 +18,10 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+  --today-highlight: rgba(13, 115, 119, 0.08);
+  --backdrop-color: rgba(28, 27, 24, 0.5);
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
 }
 
 :root.dark {
@@ -37,6 +41,8 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --today-highlight: rgba(46, 170, 174, 0.10);
+  --backdrop-color: rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -76,6 +82,25 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
+}
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Selection */
