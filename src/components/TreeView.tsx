@@ -44,7 +44,7 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
       setNodes(faculties.map((f: TreeNode) => ({ ...f, children: [], isExpanded: false })));
       setError(null);
     } catch (err) {
-      setError('Nie udalo sie wczytac wydzialow');
+      setError('Nie udało się wczytać wydziałów');
       console.error(err);
     } finally {
       setLoading(false);
@@ -214,7 +214,7 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
           <button
             className="tree-search-clear"
             onClick={() => setSearchTerm('')}
-            aria-label="Wyczysc wyszukiwanie"
+            aria-label="Wyczyść wyszukiwanie"
           >
             <XIcon size={14} />
           </button>

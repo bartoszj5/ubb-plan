@@ -1,14 +1,27 @@
-import { useState, useEffect, useCallback } from 'react';
-import TreeView from './components/TreeView';
-import ScheduleGrid from './components/ScheduleGrid';
-import Favorites from './components/Favorites';
-import { MenuIcon, SunIcon, MoonIcon, BookOpenIcon, BuildingIcon, CalendarIcon, StarIcon } from './components/Icons';
-import type { ScheduleEvent, FavoriteGroup } from './types';
-import { fetchSchedule } from './utils/api';
-import { getFavorites, addFavorite, removeFavorite, isFavorite } from './utils/favorites';
-import './App.css';
+import { useState, useEffect, useCallback } from "react";
+import TreeView from "./components/TreeView";
+import ScheduleGrid from "./components/ScheduleGrid";
+import Favorites from "./components/Favorites";
+import {
+  MenuIcon,
+  SunIcon,
+  MoonIcon,
+  BookOpenIcon,
+  BuildingIcon,
+  CalendarIcon,
+  StarIcon,
+} from "./components/Icons";
+import type { ScheduleEvent, FavoriteGroup } from "./types";
+import { fetchSchedule } from "./utils/api";
+import {
+  getFavorites,
+  addFavorite,
+  removeFavorite,
+  isFavorite,
+} from "./utils/favorites";
+import "./App.css";
 
-const LAST_SCHEDULE_KEY = 'ubb-last-schedule';
+const LAST_SCHEDULE_KEY = "ubb-last-schedule";
 
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
@@ -31,8 +44,10 @@ function getUBBWeekNumber(weekStart: Date): number {
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('ubb-dark-mode') === 'true' ||
-           window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return (
+      localStorage.getItem("ubb-dark-mode") === "true" ||
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+    );
   });
   const [favorites, setFavorites] = useState<FavoriteGroup[]>([]);
 
@@ -59,12 +74,14 @@ function App() {
           setSelectedGroup(parsed);
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-    localStorage.setItem('ubb-dark-mode', String(darkMode));
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("ubb-dark-mode", String(darkMode));
   }, [darkMode]);
 
   useEffect(() => {
@@ -78,21 +95,25 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger when typing in inputs
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
 
-      if (e.key === 'ArrowLeft' && !e.metaKey && !e.ctrlKey) {
+      if (e.key === "ArrowLeft" && !e.metaKey && !e.ctrlKey) {
         handlePrevWeek();
-      } else if (e.key === 'ArrowRight' && !e.metaKey && !e.ctrlKey) {
+      } else if (e.key === "ArrowRight" && !e.metaKey && !e.ctrlKey) {
         handleNextWeek();
-      } else if (e.key === 't' || e.key === 'T') {
+      } else if (e.key === "t" || e.key === "T") {
         handleGoToToday();
-      } else if (e.key === 'Escape') {
+      } else if (e.key === "Escape") {
         setSidebarOpen(false);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   async function loadSchedule() {
@@ -103,31 +124,38 @@ function App() {
 
     try {
       const weekNumber = getUBBWeekNumber(weekStart);
-      const data = await fetchSchedule(selectedGroup.type, selectedGroup.id, weekNumber);
+      const data = await fetchSchedule(
+        selectedGroup.type,
+        selectedGroup.id,
+        weekNumber,
+      );
       setEvents(data);
     } catch (err) {
-      setError('Nie udalo sie wczytac planu zajec');
+      setError("Nie udało się wczytać planu zajęć");
       console.error(err);
     } finally {
       setLoading(false);
     }
   }
 
-  const handleSelectSchedule = useCallback((type: string, id: string, name: string, path: string[]) => {
-    setSelectedGroup({ type, id, name, path });
-    setWeekStart(getWeekStart(new Date()));
+  const handleSelectSchedule = useCallback(
+    (type: string, id: string, name: string, path: string[]) => {
+      setSelectedGroup({ type, id, name, path });
+      setWeekStart(getWeekStart(new Date()));
 
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-  }, []);
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
+    },
+    [],
+  );
 
   const handleSelectFavorite = useCallback((favorite: FavoriteGroup) => {
     setSelectedGroup({
       type: favorite.scheduleType,
       id: favorite.id,
       name: favorite.name,
-      path: favorite.path
+      path: favorite.path,
     });
     setWeekStart(getWeekStart(new Date()));
 
@@ -146,14 +174,14 @@ function App() {
         id: selectedGroup.id,
         name: selectedGroup.name,
         path: selectedGroup.path,
-        scheduleType: selectedGroup.type
+        scheduleType: selectedGroup.type,
       };
       setFavorites(addFavorite(newFavorite));
     }
   }, [selectedGroup]);
 
   const handlePrevWeek = useCallback(() => {
-    setWeekStart(prev => {
+    setWeekStart((prev) => {
       const newDate = new Date(prev);
       newDate.setDate(newDate.getDate() - 7);
       return newDate;
@@ -161,7 +189,7 @@ function App() {
   }, []);
 
   const handleNextWeek = useCallback(() => {
-    setWeekStart(prev => {
+    setWeekStart((prev) => {
       const newDate = new Date(prev);
       newDate.setDate(newDate.getDate() + 7);
       return newDate;
@@ -183,17 +211,19 @@ function App() {
           <button
             className="menu-toggle"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label={sidebarOpen ? 'Zamknij menu' : 'Otworz menu'}
+            aria-label={sidebarOpen ? "Zamknij menu" : "Otwórz menu"}
           >
             <MenuIcon size={18} />
           </button>
-          <h1><CalendarIcon size={20} /> Plan Zajec UBB</h1>
+          <h1>
+            <CalendarIcon size={20} /> Plan Zajęć UBB
+          </h1>
         </div>
         <div className="header-right">
           <button
             className="theme-toggle"
             onClick={() => setDarkMode(!darkMode)}
-            aria-label={darkMode ? 'Tryb jasny' : 'Tryb ciemny'}
+            aria-label={darkMode ? "Tryb jasny" : "Tryb ciemny"}
           >
             {darkMode ? <SunIcon size={16} /> : <MoonIcon size={16} />}
           </button>
@@ -208,7 +238,7 @@ function App() {
           />
         )}
 
-        <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
           <div className="sidebar-section favorites-section">
             <Favorites
               favorites={favorites}
@@ -217,7 +247,9 @@ function App() {
             />
           </div>
           <div className="sidebar-section tree-section">
-            <h3><BookOpenIcon size={14} /> Wydzialy</h3>
+            <h3>
+              <BookOpenIcon size={14} /> Wydzialy
+            </h3>
             <TreeView onSelectSchedule={handleSelectSchedule} />
           </div>
         </aside>
@@ -226,20 +258,26 @@ function App() {
           {!selectedGroup ? (
             <div className="welcome-screen">
               <div className="welcome-content">
-                <h2>Witaj w aplikacji Plan Zajec UBB</h2>
-                <p>Wybierz grupe z menu po lewej stronie lub z ulubionych</p>
+                <h2>Witaj w aplikacji Plan Zajęć UBB</h2>
+                <p>Wybierz grupę z menu po lewej stronie lub z ulubionych</p>
                 <div className="welcome-tips">
                   <div className="tip">
-                    <span className="tip-icon-wrap"><BuildingIcon size={22} /></span>
-                    <span>Kliknij na wydzial, aby rozwinac kierunki</span>
+                    <span className="tip-icon-wrap">
+                      <BuildingIcon size={22} />
+                    </span>
+                    <span>Kliknij na wydział, aby rozwinąć kierunki</span>
                   </div>
                   <div className="tip">
-                    <span className="tip-icon-wrap"><CalendarIcon size={22} /></span>
+                    <span className="tip-icon-wrap">
+                      <CalendarIcon size={22} />
+                    </span>
                     <span>Wybierz grupe, aby zobaczyc plan</span>
                   </div>
                   <div className="tip">
-                    <span className="tip-icon-wrap"><StarIcon size={22} /></span>
-                    <span>Dodaj ulubione grupy dla szybkiego dostepu</span>
+                    <span className="tip-icon-wrap">
+                      <StarIcon size={22} />
+                    </span>
+                    <span>Dodaj ulubione grupy dla szybkiego dostępu</span>
                   </div>
                 </div>
               </div>
@@ -247,7 +285,7 @@ function App() {
           ) : loading ? (
             <div className="loading-screen">
               <div className="loader"></div>
-              <p>Ladowanie planu zajec...</p>
+              <p>Ladowanie planu zajęć...</p>
             </div>
           ) : error ? (
             <div className="error-screen">

@@ -16,7 +16,7 @@ interface ScheduleGridProps {
   isFavorite: boolean;
 }
 
-const DAYS = ['Poniedzialek', 'Wtorek', 'Sroda', 'Czwartek', 'Piatek', 'Sobota', 'Niedziela'];
+const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
 const DAY_ABBR = ['Pn', 'Wt', 'Sr', 'Cz', 'Pt', 'Sb', 'Nd'];
 const START_HOUR = 8;
 const END_HOUR = 21;
@@ -243,7 +243,7 @@ export default function ScheduleGrid({
           <button
             className={`favorite-btn ${isFavorite ? 'is-favorite' : ''}`}
             onClick={onToggleFavorite}
-            aria-label={isFavorite ? 'Usun z ulubionych' : 'Dodaj do ulubionych'}
+            aria-label={isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
           >
             {isFavorite ? <StarIcon size={18} /> : <StarOutlineIcon size={18} />}
           </button>
@@ -252,19 +252,19 @@ export default function ScheduleGrid({
           <button
             className="weekend-toggle"
             onClick={() => setShowWeekend(w => !w)}
-            aria-label={showWeekend ? 'Ukryj weekend' : 'Pokaz weekend'}
+            aria-label={showWeekend ? 'Ukryj weekend' : 'Pokaż weekend'}
           >
             {showWeekend ? 'Pn-Nd' : 'Pn-Pt'}
           </button>
           <div className="week-navigation">
-            <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzien">
+            <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzień">
               <ChevronLeftIcon size={16} />
             </button>
             <button onClick={onGoToToday} className="today-btn">
               Dzisiaj
             </button>
             <span className="week-label">{formatWeekRange(weekStart)}</span>
-            <button onClick={onNextWeek} className="nav-btn" aria-label="Nastepny tydzien">
+            <button onClick={onNextWeek} className="nav-btn" aria-label="Następny tydzień">
               <ChevronRightIcon size={16} />
             </button>
           </div>
