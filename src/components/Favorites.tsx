@@ -14,7 +14,7 @@ export default function Favorites({ favorites, onSelect, onRemove }: FavoritesPr
       <div className="favorites-empty">
         <span className="favorites-icon"><StarOutlineIcon size={24} /></span>
         <p>Brak ulubionych grup</p>
-        <small>Dodaj plan do ulubionych klikajac ikonke gwiazdki</small>
+        <small>Dodaj plan do ulubionych klikając ikonkę gwiazdki</small>
       </div>
     );
   }
@@ -40,7 +40,7 @@ export default function Favorites({ favorites, onSelect, onRemove }: FavoritesPr
               e.stopPropagation();
               onRemove(fav.id);
             }}
-            aria-label={`Usun ${fav.name} z ulubionych`}
+            aria-label={`Usuń ${fav.name} z ulubionych`}
           >
             <XIcon size={14} />
           </button>

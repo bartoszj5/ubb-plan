@@ -81,7 +81,7 @@ export default function EventModal({ event, onClose }: EventModalProps) {
             <div className="event-modal-row">
               <BookOpenIcon size={16} />
               <div>
-                <div className="event-modal-label">Typ zajec</div>
+                <div className="event-modal-label">Typ zajęć</div>
                 <div className="event-modal-value">{event.type}</div>
               </div>
             </div>
@@ -90,7 +90,7 @@ export default function EventModal({ event, onClose }: EventModalProps) {
             <div className="event-modal-row">
               <UserIcon size={16} />
               <div>
-                <div className="event-modal-label">Prowadzacy</div>
+                <div className="event-modal-label">Prowadzący</div>
                 <div className="event-modal-value">{event.teacher}</div>
               </div>
             </div>
