@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#11999D"/>
+      <stop offset="100%" stop-color="#0A6265"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+
+  <!-- Calendar card -->
+  <rect x="80" y="128" width="352" height="296" rx="28" fill="white"/>
+
+  <!-- Binding clips -->
+  <rect x="172" y="92" width="28" height="64" rx="14" fill="white"/>
+  <rect x="312" y="92" width="28" height="64" rx="14" fill="white"/>
+
+  <!-- UBB text in header area -->
+  <text x="256" y="210" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif" font-size="72" font-weight="900" letter-spacing="6" fill="#0D7377">UBB</text>
+
+  <!-- Thin divider -->
+  <rect x="116" y="232" width="280" height="3" rx="1.5" fill="#0D7377" opacity="0.15"/>
+
+  <!-- Row 1: gold hero + light teal -->
+  <rect x="116" y="252" width="168" height="40" rx="11" fill="#C4942A"/>
+  <rect x="300" y="252" width="96" height="40" rx="11" fill="#0D7377" opacity="0.15"/>
+
+  <!-- Row 2: medium teal + strong teal -->
+  <rect x="116" y="306" width="104" height="40" rx="11" fill="#0D7377" opacity="0.4"/>
+  <rect x="236" y="306" width="160" height="40" rx="11" fill="#0D7377" opacity="0.8"/>
+
+  <!-- Row 3: full teal, bold anchor -->
+  <rect x="116" y="360" width="280" height="40" rx="11" fill="#0D7377"/>
+</svg>

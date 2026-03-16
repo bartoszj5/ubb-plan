@@ -216,7 +216,7 @@ function App() {
             <MenuIcon size={18} />
           </button>
           <h1>
-            <CalendarIcon size={20} /> Plan Zajęć UBB
+            <img src="/logo.svg" alt="" width={22} height={22} className="header-logo" /> Plan Zajęć UBB
           </h1>
         </div>
         <div className="header-right">
