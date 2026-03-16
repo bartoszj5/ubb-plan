@@ -19,6 +19,7 @@ import {
   removeFavorite,
   isFavorite,
 } from "./utils/favorites";
+import PWAUpdatePrompt from "./components/PWAUpdatePrompt";
 import "./App.css";
 
 const LAST_SCHEDULE_KEY = "ubb-last-schedule";
@@ -202,6 +203,7 @@ function App() {
 
   return (
     <div className="app">
+      <PWAUpdatePrompt />
       <a href="#main-content" className="skip-to-content">
         Przejdz do tresci
       </a>

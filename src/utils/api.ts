@@ -14,6 +14,12 @@ export async function fetchTreeBranch(branch: string, type: number = 1) {
   return response.json();
 }
 
+export async function fetchTreeIndex() {
+  const response = await fetch(`${API_BASE}/api/tree-index`);
+  if (!response.ok) throw new Error('Failed to fetch tree index');
+  return response.json();
+}
+
 export async function fetchSchedule(type: string, id: string, week?: number) {
   let url = `${API_BASE}/api/schedule/${type}/${id}`;
   if (week) {

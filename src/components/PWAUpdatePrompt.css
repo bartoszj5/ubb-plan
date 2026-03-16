@@ -1,0 +1,78 @@
+.pwa-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10000;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 320px;
+  animation: pwa-slide-in 0.3s ease;
+}
+
+@keyframes pwa-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pwa-toast-message {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.pwa-toast-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pwa-toast-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background var(--transition-fast);
+  font-family: inherit;
+}
+
+.pwa-toast-btn-reload {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pwa-toast-btn-reload:hover {
+  background: var(--accent-hover);
+}
+
+.pwa-toast-btn-close {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.pwa-toast-btn-close:hover {
+  background: var(--border-color);
+}
+
+@media (max-width: 480px) {
+  .pwa-toast {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+}

@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TreeNode } from '../types';
-import { fetchFaculties, fetchTreeBranch } from '../utils/api';
+import { fetchFaculties, fetchTreeBranch, fetchTreeIndex } from '../utils/api';
 import { BuildingIcon, FolderIcon, CalendarIcon, ChevronRightIcon, LoaderIcon, SearchIcon, XIcon } from './Icons';
 import './TreeView.css';
 
@@ -12,6 +12,15 @@ interface TreeNodeState extends TreeNode {
   children?: TreeNodeState[];
   isExpanded?: boolean;
   isLoading?: boolean;
+}
+
+interface SearchResult {
+  id: string;
+  name: string;
+  type: 'faculty' | 'branch' | 'schedule';
+  scheduleType: string | null;
+  hasChildren: boolean;
+  path: string[];
 }
 
 function HighlightMatch({ text, search }: { text: string; search: string }) {
@@ -32,10 +41,55 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const treeIndexRef = useRef<SearchResult[] | null>(null);
 
   useEffect(() => {
     loadFaculties();
   }, []);
+
+  // Debounced server-side search
+  useEffect(() => {
+    if (searchTerm.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const treeIndex: SearchResult[] = treeIndexRef.current ?? await fetchTreeIndex();
+        if (!treeIndexRef.current) {
+          treeIndexRef.current = treeIndex;
+        }
+        const term = searchTerm.toLowerCase();
+        const results = treeIndex
+          .filter(node => {
+            if (node.name.toLowerCase().includes(term)) return true;
+            // Match path excluding top-level faculty name to avoid false positives
+            const pathWithoutFaculty = node.path.slice(1);
+            return pathWithoutFaculty.some(p => p.toLowerCase().includes(term));
+          })
+          .filter(node => node.scheduleType)
+          .sort((a, b) => {
+            // Prioritize direct name matches over path-only matches
+            const aName = a.name.toLowerCase().includes(term) ? 0 : 1;
+            const bName = b.name.toLowerCase().includes(term) ? 0 : 1;
+            if (aName !== bName) return aName - bName;
+            return a.name.localeCompare(b.name, 'pl');
+          })
+          .slice(0, 50);
+        setSearchResults(results);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   async function loadFaculties() {
     try {
@@ -115,15 +169,16 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
     }
   }, [onSelectSchedule, toggleNode]);
 
+  const handleSearchResultClick = useCallback((result: SearchResult) => {
+    if (result.scheduleType) {
+      onSelectSchedule(result.scheduleType, result.id, result.name, result.path);
+      setSearchTerm('');
+      setSearchResults([]);
+    }
+  }, [onSelectSchedule]);
+
   const renderNode = (node: TreeNodeState, depth: number = 0, path: string[] = []): React.ReactNode => {
     const currentPath = [...path, node.name];
-    const matchesSearch = searchTerm === '' ||
-      node.name.toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (!matchesSearch && (!node.children || node.children.length === 0)) {
-      return <></>;
-    }
-
     const isHybrid = node.type === 'schedule' && node.hasChildren;
     const isPureSchedule = node.type === 'schedule' && !node.hasChildren;
 
@@ -151,7 +206,7 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
             {isHybrid && <FolderIcon size={15} />}
           </span>
           <span className="node-name">
-            <HighlightMatch text={node.name} search={searchTerm} />
+            {node.name}
           </span>
           {isHybrid && (
             <button
@@ -172,19 +227,7 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
     );
   };
 
-  const filteredNodes = searchTerm
-    ? nodes.filter(n => {
-        const matches = n.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const childrenMatch = n.children?.some(c =>
-          c.name.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        return matches || childrenMatch;
-      })
-    : nodes;
-
-  const hasResults = filteredNodes.length > 0 || nodes.some(n =>
-    n.children?.some(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const isSearchActive = searchTerm.length >= 2;
 
   if (loading) {
     return <div className="tree-loading">Ladowanie wydzialow...</div>;
@@ -213,18 +256,43 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
         {searchTerm && (
           <button
             className="tree-search-clear"
-            onClick={() => setSearchTerm('')}
-            aria-label="Wyczyść wyszukiwanie"
+            onClick={() => { setSearchTerm(''); setSearchResults([]); }}
+            aria-label="Wyczysc wyszukiwanie"
           >
             <XIcon size={14} />
           </button>
         )}
       </div>
       <div className="tree-nodes">
-        {searchTerm && !hasResults ? (
-          <div className="tree-no-results">
-            <p>Brak wynikow dla "{searchTerm}"</p>
-          </div>
+        {isSearchActive ? (
+          searchLoading && searchResults.length === 0 ? (
+            <div className="search-loading">
+              <LoaderIcon size={16} />
+              <span>Wyszukiwanie...</span>
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div className="search-results">
+              {searchResults.map(result => (
+                <div
+                  key={result.id}
+                  className="search-result"
+                  onClick={() => handleSearchResultClick(result)}
+                >
+                  <span className="search-result-path">
+                    {result.path.slice(0, -1).join(' \u203A ')}
+                  </span>
+                  <span className="search-result-name">
+                    <CalendarIcon size={14} />
+                    <HighlightMatch text={result.name} search={searchTerm} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="tree-no-results">
+              <p>Brak wynikow dla "{searchTerm}"</p>
+            </div>
+          )
         ) : (
           nodes.map(node => renderNode(node))
         )}
