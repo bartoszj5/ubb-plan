@@ -248,7 +248,6 @@
 .day-events {
   position: relative;
   flex: none;
-  height: calc(13 * 60px);
   background: repeating-linear-gradient(
     to bottom,
     var(--bg-primary) 0px,

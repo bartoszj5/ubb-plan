@@ -18,10 +18,8 @@ interface ScheduleGridProps {
 
 const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
 const DAY_ABBR = ['Pn', 'Wt', 'Sr', 'Cz', 'Pt', 'Sb', 'Nd'];
-const START_HOUR = 8;
-const END_HOUR = 21;
-const TOTAL_HOURS = END_HOUR - START_HOUR;
-const HOURS = Array.from({ length: TOTAL_HOURS }, (_, i) => i + START_HOUR);
+const MIN_START_HOUR = 7;
+const MAX_END_HOUR = 21;
 
 const COLORS = [
   '#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED',
@@ -97,6 +95,43 @@ export default function ScheduleGrid({
     }
   }, [weekStart, todayIndex]);
 
+  const displayDays = showWeekend ? 7 : 5;
+
+  // Compute dynamic hour range based on events
+  const { startHour, endHour, totalHours, hours } = useMemo(() => {
+    let earliest = MAX_END_HOUR;
+    let latest = MIN_START_HOUR;
+
+    events.forEach(event => {
+      const s = new Date(event.start);
+      const e = new Date(event.end);
+      const sh = s.getHours() + s.getMinutes() / 60;
+      const eh = e.getHours() + e.getMinutes() / 60;
+      if (sh < earliest) earliest = sh;
+      if (eh > latest) latest = eh;
+    });
+
+    if (earliest >= latest) {
+      const total = MAX_END_HOUR - MIN_START_HOUR - 1;
+      return {
+        startHour: MIN_START_HOUR + 1,
+        endHour: MAX_END_HOUR,
+        totalHours: total,
+        hours: Array.from({ length: total }, (_, i) => i + MIN_START_HOUR + 1),
+      };
+    }
+
+    const s = Math.max(MIN_START_HOUR, Math.floor(earliest) - 1);
+    const e = Math.min(MAX_END_HOUR, Math.ceil(latest));
+    const total = e - s;
+    return {
+      startHour: s,
+      endHour: e,
+      totalHours: total,
+      hours: Array.from({ length: total }, (_, i) => i + s),
+    };
+  }, [events]);
+
   // Current time indicator
   useEffect(() => {
     const updateTimeIndicator = () => {
@@ -105,9 +140,9 @@ export default function ScheduleGrid({
         return;
       }
       const now = new Date();
-      const hours = now.getHours() + now.getMinutes() / 60;
-      if (hours >= START_HOUR && hours <= END_HOUR) {
-        setTimeIndicatorPos(((hours - START_HOUR) / TOTAL_HOURS) * 100);
+      const h = now.getHours() + now.getMinutes() / 60;
+      if (h >= startHour && h <= endHour) {
+        setTimeIndicatorPos(((h - startHour) / totalHours) * 100);
       } else {
         setTimeIndicatorPos(null);
       }
@@ -116,9 +151,7 @@ export default function ScheduleGrid({
     updateTimeIndicator();
     const interval = setInterval(updateTimeIndicator, 60000);
     return () => clearInterval(interval);
-  }, [todayIndex]);
-
-  const displayDays = showWeekend ? 7 : 5;
+  }, [todayIndex, startHour, endHour, totalHours]);
 
   /* Logic for grouping overlapping events */
   const eventsByDay = useMemo(() => {
@@ -193,11 +226,11 @@ export default function ScheduleGrid({
           const col = eventCols.get(ev) || 0;
           const start = new Date(ev.start);
           const end = new Date(ev.end);
-          const startHour = start.getHours() + start.getMinutes() / 60;
-          const endHour = end.getHours() + end.getMinutes() / 60;
+          const evStartHour = start.getHours() + start.getMinutes() / 60;
+          const evEndHour = end.getHours() + end.getMinutes() / 60;
 
-          const top = ((startHour - START_HOUR) / TOTAL_HOURS) * 100;
-          const height = ((endHour - startHour) / TOTAL_HOURS) * 100;
+          const top = ((evStartHour - startHour) / totalHours) * 100;
+          const height = ((evEndHour - evStartHour) / totalHours) * 100;
           const leftPct = (col / totalCols) * 100;
           const widthPct = 100 / totalCols;
 
@@ -210,7 +243,7 @@ export default function ScheduleGrid({
             '--event-color': getEventColor(ev.subject),
           } as React.CSSProperties;
 
-          processedEvents.push({ ...ev, style, durationHours: endHour - startHour });
+          processedEvents.push({ ...ev, style, durationHours: evEndHour - evStartHour });
         });
       });
 
@@ -218,7 +251,7 @@ export default function ScheduleGrid({
     });
 
     return map;
-  }, [events]);
+  }, [events, startHour, totalHours]);
 
   const formatEventTime = (event: ScheduleEvent) => {
     const start = new Date(event.start);
@@ -290,7 +323,7 @@ export default function ScheduleGrid({
       <div className="grid-container">
         <div className="time-column">
           <div className="time-header"></div>
-          {HOURS.map(hour => (
+          {hours.map(hour => (
             <div key={hour} className="time-slot">
               {hour}:00
             </div>
@@ -306,7 +339,7 @@ export default function ScheduleGrid({
               <span className="day-name">{DAYS[dayIndex]}</span>
               <span className="day-date">{formatDate(weekDates[dayIndex])}</span>
             </div>
-            <div className="day-events">
+            <div className="day-events" style={{ height: `calc(${totalHours} * 60px)` }}>
               {todayIndex === dayIndex && timeIndicatorPos !== null && (
                 <div
                   className="time-indicator"
@@ -325,7 +358,7 @@ export default function ScheduleGrid({
                   onClick={() => setModalEvent(event)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalEvent(event); }}}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalEvent(event); } }}
                 >
                   <span className="event-subject">{event.subject}</span>
                   <span className="event-type">{event.type}</span>
