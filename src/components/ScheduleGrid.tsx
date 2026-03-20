@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import type { ScheduleEvent } from '../types';
 import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
 import EventModal from './EventModal';
@@ -87,7 +87,12 @@ export default function ScheduleGrid({
   });
 
   // Reset mobile day when week changes
+  const swipeWeekChangeRef = useRef(false);
   useEffect(() => {
+    if (swipeWeekChangeRef.current) {
+      swipeWeekChangeRef.current = false;
+      return;
+    }
     if (todayIndex >= 0) {
       setMobileViewDay(todayIndex);
     } else {
@@ -96,6 +101,40 @@ export default function ScheduleGrid({
   }, [weekStart, todayIndex]);
 
   const displayDays = showWeekend ? 7 : 5;
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+
+    if (dx < 0) {
+      setMobileViewDay(prev => {
+        if (prev < displayDays - 1) return prev + 1;
+        swipeWeekChangeRef.current = true;
+        onNextWeek();
+        return 0;
+      });
+    } else {
+      setMobileViewDay(prev => {
+        if (prev > 0) return prev - 1;
+        swipeWeekChangeRef.current = true;
+        onPrevWeek();
+        return displayDays - 1;
+      });
+    }
+  }, [displayDays, onNextWeek, onPrevWeek]);
 
   // Compute dynamic hour range based on events
   const { startHour, endHour, totalHours, hours } = useMemo(() => {
@@ -320,7 +359,7 @@ export default function ScheduleGrid({
         ))}
       </div>
 
-      <div className="grid-container">
+      <div className="grid-container" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <div className="time-column">
           <div className="time-header"></div>
           {hours.map(hour => (
