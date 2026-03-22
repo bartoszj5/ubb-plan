@@ -121,6 +121,8 @@ export function parseScheduleHTMLMeta(html) {
   return { subjects, teachers };
 }
 
+const teacherNameCache = new Map();
+
 export async function fetchTeacherFullNames(teacherMap) {
   const entries = Object.entries(teacherMap);
   if (entries.length === 0) return {};
@@ -128,12 +130,18 @@ export async function fetchTeacherFullNames(teacherMap) {
   const results = {};
   await Promise.all(
     entries.map(async ([abbr, id]) => {
+      if (teacherNameCache.has(abbr)) {
+        results[abbr] = teacherNameCache.get(abbr);
+        return;
+      }
       try {
         const res = await fetch(`https://plany.ubb.edu.pl/plan.php?type=10&id=${id}&winW=2000&winH=1000`);
         const html = await res.text();
         const titleMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);
         if (titleMatch) {
-          results[abbr] = titleMatch[1].trim();
+          const fullName = titleMatch[1].trim();
+          results[abbr] = fullName;
+          teacherNameCache.set(abbr, fullName);
         }
       } catch {
         // Keep abbreviation if fetch fails
