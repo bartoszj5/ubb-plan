@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import type { ScheduleEvent } from '../types';
-import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
+import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon } from './Icons';
 import EventModal from './EventModal';
 import './ScheduleGrid.css';
 
@@ -17,31 +17,48 @@ interface ScheduleGridProps {
 }
 
 const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
-const DAY_ABBR = ['Pn', 'Wt', 'Sr', 'Cz', 'Pt', 'Sb', 'Nd'];
+const DAY_ABBR = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 const MIN_START_HOUR = 7;
 const MAX_END_HOUR = 21;
 
-const COLORS = [
-  '#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED',
-  '#DB2777', '#0891B2', '#4D7C0F', '#C2410C', '#4338CA'
-];
+/* ==================== Type-based color system ==================== */
+const TYPE_COLORS: Record<string, string> = {
+  'wyk': '#6366F1',
+  'wykład': '#6366F1',
+  'lecture': '#6366F1',
+  'w': '#6366F1',
+  'ćw': '#F59E0B',
+  'ćwiczenia': '#F59E0B',
+  'exercises': '#F59E0B',
+  'lab': '#10B981',
+  'laboratorium': '#10B981',
+  'laboratory': '#10B981',
+  'sem': '#EC4899',
+  'seminarium': '#EC4899',
+  'seminar': '#EC4899',
+  'lek': '#8B5CF6',
+  'lektorat': '#8B5CF6',
+  'proj': '#F97316',
+  'projekt': '#F97316',
+  'konw': '#06B6D4',
+  'konwersatorium': '#06B6D4',
+};
 
-function getEventColor(subject: string): string {
-  let hash = 0;
-  for (let i = 0; i < subject.length; i++) {
-    hash = subject.charCodeAt(i) + ((hash << 5) - hash);
+function getTypeColor(type: string): string {
+  const normalized = type.toLowerCase().trim();
+  if (TYPE_COLORS[normalized]) return TYPE_COLORS[normalized];
+  for (const [key, color] of Object.entries(TYPE_COLORS)) {
+    if (normalized.includes(key) || key.includes(normalized)) return color;
   }
-  return COLORS[Math.abs(hash) % COLORS.length];
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+  return '#6366F1';
 }
 
 function formatWeekRange(start: Date): string {
   const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return `${formatDate(start)} - ${formatDate(end)}`;
+  end.setDate(end.getDate() + 4); // Mon-Fri
+  const startStr = start.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+  const endStr = end.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+  return `${startStr} – ${endStr}`;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -64,6 +81,7 @@ export default function ScheduleGrid({
   const [showWeekend, setShowWeekend] = useState(false);
   const [modalEvent, setModalEvent] = useState<ScheduleEvent | null>(null);
   const [timeIndicatorPos, setTimeIndicatorPos] = useState<number | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const today = useMemo(() => new Date(), []);
 
@@ -192,6 +210,24 @@ export default function ScheduleGrid({
     return () => clearInterval(interval);
   }, [todayIndex, startHour, endHour, totalHours]);
 
+  // Scroll to current time on mount
+  useEffect(() => {
+    if (timeIndicatorPos !== null && gridRef.current) {
+      const container = gridRef.current;
+      const totalHeight = container.scrollHeight;
+      const scrollTarget = (timeIndicatorPos / 100) * totalHeight - container.clientHeight / 3;
+      container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
+    }
+  }, [events.length > 0 && timeIndicatorPos !== null]);
+
+  // Check if an event is happening now
+  const isEventNow = useCallback((event: ScheduleEvent): boolean => {
+    const now = new Date();
+    const start = new Date(event.start);
+    const end = new Date(event.end);
+    return now >= start && now <= end;
+  }, []);
+
   /* Logic for grouping overlapping events */
   const eventsByDay = useMemo(() => {
     const map: Map<number, (ScheduleEvent & { style: React.CSSProperties; durationHours: number })[]> = new Map();
@@ -279,7 +315,8 @@ export default function ScheduleGrid({
             left: `calc(${leftPct}% + 2px)`,
             width: `calc(${widthPct}% - 4px)`,
             zIndex: 1,
-            '--event-color': getEventColor(ev.subject),
+            '--event-color': getTypeColor(ev.type),
+            animationDelay: `${(processedEvents.length % 8) * 30}ms`,
           } as React.CSSProperties;
 
           processedEvents.push({ ...ev, style, durationHours: evEndHour - evStartHour });
@@ -297,12 +334,19 @@ export default function ScheduleGrid({
     const end = new Date(event.end);
     const format = (d: Date) =>
       `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-    return `${format(start)} - ${format(end)}`;
+    return `${format(start)}–${format(end)}`;
   };
 
   const breadcrumb = groupPath && groupPath.length > 1
-    ? groupPath.slice(0, -1).join(' > ')
+    ? groupPath.slice(0, -1).join(' \u203A ')
     : null;
+
+  // Check if event description mentions remote learning
+  const isRemote = (event: ScheduleEvent) => {
+    const desc = (event.description || '').toLowerCase();
+    const loc = (event.location || '').toLowerCase();
+    return desc.includes('zdaln') || loc.includes('zdaln') || !event.room;
+  };
 
   return (
     <div className="schedule-grid">
@@ -326,14 +370,14 @@ export default function ScheduleGrid({
             onClick={() => setShowWeekend(w => !w)}
             aria-label={showWeekend ? 'Ukryj weekend' : 'Pokaż weekend'}
           >
-            {showWeekend ? 'Pn-Nd' : 'Pn-Pt'}
+            {showWeekend ? 'Pn–Nd' : 'Pn–Pt'}
           </button>
           <div className="week-navigation">
             <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzień">
               <ChevronLeftIcon size={16} />
             </button>
             <button onClick={onGoToToday} className="today-btn">
-              Dzisiaj
+              Dziś
             </button>
             <span className="week-label">{formatWeekRange(weekStart)}</span>
             <button onClick={onNextWeek} className="nav-btn" aria-label="Następny tydzień">
@@ -343,7 +387,7 @@ export default function ScheduleGrid({
         </div>
       </div>
 
-      {/* Mobile day tabs */}
+      {/* Mobile day tabs — horizontal chip bar */}
       <div className="mobile-day-tabs" role="tablist">
         {Array.from({ length: displayDays }, (_, i) => i).map(i => (
           <button
@@ -359,7 +403,7 @@ export default function ScheduleGrid({
         ))}
       </div>
 
-      <div className="grid-container" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <div className="grid-container" ref={gridRef} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <div className="time-column">
           <div className="time-header"></div>
           {hours.map(hour => (
@@ -375,8 +419,8 @@ export default function ScheduleGrid({
             className={`day-column ${todayIndex === dayIndex ? 'today' : ''} ${dayIndex === mobileViewDay ? 'mobile-active' : ''}`}
           >
             <div className="day-header">
-              <span className="day-name">{DAYS[dayIndex]}</span>
-              <span className="day-date">{formatDate(weekDates[dayIndex])}</span>
+              <span className="day-name">{DAYS[dayIndex].slice(0, 3)}</span>
+              <span className="day-date">{weekDates[dayIndex].getDate()}</span>
             </div>
             <div className="day-events" style={{ height: `calc(${totalHours} * 60px)` }}>
               {todayIndex === dayIndex && timeIndicatorPos !== null && (
@@ -391,9 +435,9 @@ export default function ScheduleGrid({
               {eventsByDay.get(dayIndex)?.map((event, i) => (
                 <div
                   key={i}
-                  className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''}`}
+                  className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''} ${isEventNow(event) ? 'event-now' : ''}`}
                   style={event.style}
-                  title={`${event.subjectFullName || event.subject} (${event.type})\n${event.teacherFullName || event.teacher}\n${event.room}\n${formatEventTime(event)}`}
+                  title={`${event.subjectFullName || event.subject} (${event.type})\n${event.teacherFullName || event.teacher}\n${event.room || 'zdalnie'}\n${formatEventTime(event)}`}
                   onClick={() => setModalEvent(event)}
                   role="button"
                   tabIndex={0}
@@ -401,8 +445,23 @@ export default function ScheduleGrid({
                 >
                   <span className="event-subject">{event.subjectFullName || event.subject}</span>
                   <span className="event-type">{event.type}</span>
-                  <span className="event-time">{formatEventTime(event)}</span>
-                  <span className="event-room">{event.room}</span>
+                  <div className="event-meta">
+                    <span className="event-time">
+                      <ClockIcon size={10} />
+                      {formatEventTime(event)}
+                    </span>
+                    {event.room ? (
+                      <span className="event-room">
+                        <MapPinIcon size={10} />
+                        {event.room}
+                      </span>
+                    ) : isRemote(event) ? (
+                      <span className="event-note">
+                        <WifiIcon size={10} />
+                        zdalnie
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

@@ -9,6 +9,7 @@ import {
 import TreeView from "./components/TreeView";
 import ScheduleGrid from "./components/ScheduleGrid";
 import Favorites from "./components/Favorites";
+import CommandPalette from "./components/CommandPalette";
 import {
   MenuIcon,
   SunIcon,
@@ -17,6 +18,7 @@ import {
   BuildingIcon,
   CalendarIcon,
   StarIcon,
+  SearchIcon,
 } from "./components/Icons";
 import type { ScheduleEvent, FavoriteGroup } from "./types";
 import { fetchSchedule, fetchGroupInfo } from "./utils/api";
@@ -51,24 +53,24 @@ function WelcomeScreen() {
   return (
     <div className="welcome-screen">
       <div className="welcome-content">
-        <h2>Witaj w aplikacji Plan Zajęć UBB</h2>
+        <h2>Plan Zajęć UBB</h2>
         <p>Wybierz grupę z menu po lewej stronie lub z ulubionych</p>
         <div className="welcome-tips">
           <div className="tip">
             <span className="tip-icon-wrap">
-              <BuildingIcon size={22} />
+              <BuildingIcon size={20} />
             </span>
             <span>Kliknij na wydział, aby rozwinąć kierunki</span>
           </div>
           <div className="tip">
             <span className="tip-icon-wrap">
-              <CalendarIcon size={22} />
+              <CalendarIcon size={20} />
             </span>
-            <span>Wybierz grupe, aby zobaczyc plan</span>
+            <span>Wybierz grupę, aby zobaczyć plan</span>
           </div>
           <div className="tip">
             <span className="tip-icon-wrap">
-              <StarIcon size={22} />
+              <StarIcon size={20} />
             </span>
             <span>Dodaj ulubione grupy dla szybkiego dostępu</span>
           </div>
@@ -200,7 +202,6 @@ function SchedulePage() {
       };
       addFavorite(newFavorite);
     }
-    // Force re-render by dispatching a storage event
     window.dispatchEvent(new Event("favorites-changed"));
   }, [id, scheduleType, groupName, groupPath]);
 
@@ -208,7 +209,7 @@ function SchedulePage() {
     return (
       <div className="loading-screen">
         <div className="loader"></div>
-        <p>Ladowanie planu zajęć...</p>
+        <p>Ładowanie planu zajęć...</p>
       </div>
     );
   }
@@ -217,7 +218,7 @@ function SchedulePage() {
     return (
       <div className="error-screen">
         <p>{error}</p>
-        <button onClick={loadSchedule}>Sprobuj ponownie</button>
+        <button onClick={loadSchedule}>Spróbuj ponownie</button>
       </div>
     );
   }
@@ -239,11 +240,13 @@ function SchedulePage() {
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
+  // Dark mode is now the DEFAULT. Light mode is opt-in via .light class.
   const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem("ubb-dark-mode") === "true" ||
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-    );
+    const stored = localStorage.getItem("ubb-dark-mode");
+    if (stored !== null) return stored === "true";
+    // Default to dark unless user explicitly prefers light
+    return !window.matchMedia("(prefers-color-scheme: light)").matches;
   });
   const [favorites, setFavorites] = useState<FavoriteGroup[]>([]);
   const navigate = useNavigate();
@@ -291,12 +294,17 @@ function App() {
     return () => window.removeEventListener("favorites-changed", handler);
   }, []);
 
+  // Apply theme class: dark is default (no class), light gets .light
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
+    if (darkMode) {
+      document.documentElement.classList.remove("light");
+    } else {
+      document.documentElement.classList.add("light");
+    }
     localStorage.setItem("ubb-dark-mode", String(darkMode));
   }, [darkMode]);
 
-  // Keyboard shortcut: Escape to close sidebar
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -305,14 +313,31 @@ function App() {
       )
         return;
 
+      // Ctrl+K / Cmd+K — Command palette
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdPaletteOpen(prev => !prev);
+        return;
+      }
+
       if (e.key === "Escape") {
-        setSidebarOpen(false);
+        if (cmdPaletteOpen) {
+          setCmdPaletteOpen(false);
+        } else {
+          setSidebarOpen(false);
+        }
+        return;
+      }
+
+      // D — toggle dark/light mode
+      if (e.key === "d" || e.key === "D") {
+        setDarkMode(prev => !prev);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [cmdPaletteOpen]);
 
   const handleSelectSchedule = useCallback(
     (type: string, id: string, name: string, path: string[]) => {
@@ -346,7 +371,7 @@ function App() {
     <div className="app">
       <PWAUpdatePrompt />
       <a href="#main-content" className="skip-to-content">
-        Przejdz do tresci
+        Przejdź do treści
       </a>
 
       <header className="app-header">
@@ -362,20 +387,29 @@ function App() {
             <img
               src="/logo.svg"
               alt=""
-              width={22}
-              height={22}
+              width={20}
+              height={20}
               className="header-logo"
             />{" "}
-            Plan Zajęć UBB
+            Plan UBB
           </h1>
         </div>
         <div className="header-right">
+          <button
+            className="cmd-palette-trigger"
+            onClick={() => setCmdPaletteOpen(true)}
+            aria-label="Wyszukaj plan"
+          >
+            <SearchIcon size={13} />
+            <span>Szukaj...</span>
+            <span className="kbd">Ctrl+K</span>
+          </button>
           <button
             className="theme-toggle"
             onClick={() => setDarkMode(!darkMode)}
             aria-label={darkMode ? "Tryb jasny" : "Tryb ciemny"}
           >
-            {darkMode ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+            {darkMode ? <SunIcon size={15} /> : <MoonIcon size={15} />}
           </button>
         </div>
       </header>
@@ -398,7 +432,7 @@ function App() {
           </div>
           <div className="sidebar-section tree-section">
             <h3>
-              <BookOpenIcon size={14} /> Wydzialy
+              <BookOpenIcon size={13} /> Wydziały
             </h3>
             <TreeView onSelectSchedule={handleSelectSchedule} />
           </div>
@@ -415,6 +449,11 @@ function App() {
           </Routes>
         </main>
       </div>
+
+      <CommandPalette
+        isOpen={cmdPaletteOpen}
+        onClose={() => setCmdPaletteOpen(false)}
+      />
     </div>
   );
 }
