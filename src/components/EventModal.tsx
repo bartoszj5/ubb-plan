@@ -63,7 +63,12 @@ export default function EventModal({ event, onClose }: EventModalProps) {
     <div className="event-modal-overlay" ref={overlayRef} onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label={event.subject}>
       <div className="event-modal">
         <div className="event-modal-header">
-          <h3>{event.subject}</h3>
+          <div>
+            <h3>{event.subjectFullName || event.subject}</h3>
+            {event.subjectFullName && (
+              <div className="event-modal-abbr">{event.subject}</div>
+            )}
+          </div>
           <button ref={closeRef} className="event-modal-close" onClick={onClose} aria-label="Zamknij">
             <XIcon size={20} />
           </button>
@@ -91,7 +96,7 @@ export default function EventModal({ event, onClose }: EventModalProps) {
               <UserIcon size={16} />
               <div>
                 <div className="event-modal-label">Prowadzący</div>
-                <div className="event-modal-value">{event.teacher}</div>
+                <div className="event-modal-value">{event.teacherFullName || event.teacher}</div>
               </div>
             </div>
           )}
