@@ -95,6 +95,54 @@ function parseICSDate(dateStr) {
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${suffix}`;
 }
 
+export function parseScheduleHTMLMeta(html) {
+  const subjects = {};
+  const teachers = {};
+
+  // Parse legend: <strong>Am</strong> - Analiza macierzowa, występowanie: ...
+  const subjectRegex = /<strong>([^<]+)<\/strong>\s*-\s*([^,<]+)/g;
+  let match;
+  while ((match = subjectRegex.exec(html)) !== null) {
+    const abbr = match[1].trim();
+    const fullName = match[2].trim();
+    subjects[abbr] = fullName;
+  }
+
+  // Parse teacher links: <a href="plan.php?type=10&amp;id=91259">SWą</a>
+  const teacherRegex = /<a[^>]*href="plan\.php\?type=10&(?:amp;)?id=(\d+)"[^>]*>([^<]+)<\/a>/g;
+  while ((match = teacherRegex.exec(html)) !== null) {
+    const id = match[1];
+    const abbr = match[2].trim();
+    if (!teachers[abbr]) {
+      teachers[abbr] = id;
+    }
+  }
+
+  return { subjects, teachers };
+}
+
+export async function fetchTeacherFullNames(teacherMap) {
+  const entries = Object.entries(teacherMap);
+  if (entries.length === 0) return {};
+
+  const results = {};
+  await Promise.all(
+    entries.map(async ([abbr, id]) => {
+      try {
+        const res = await fetch(`https://plany.ubb.edu.pl/plan.php?type=10&id=${id}&winW=2000&winH=1000`);
+        const html = await res.text();
+        const titleMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);
+        if (titleMatch) {
+          results[abbr] = titleMatch[1].trim();
+        }
+      } catch {
+        // Keep abbreviation if fetch fails
+      }
+    })
+  );
+  return results;
+}
+
 export function parseICS(icsData) {
   const events = [];
   const eventBlocks = icsData.split('BEGIN:VEVENT').slice(1);

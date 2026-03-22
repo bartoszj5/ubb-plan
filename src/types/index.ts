@@ -18,6 +18,8 @@ export interface ScheduleEvent {
   room: string;
   location?: string;
   description?: string;
+  subjectFullName?: string;
+  teacherFullName?: string;
 }
 
 export interface FavoriteGroup {

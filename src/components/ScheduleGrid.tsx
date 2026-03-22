@@ -393,13 +393,13 @@ export default function ScheduleGrid({
                   key={i}
                   className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''}`}
                   style={event.style}
-                  title={`${event.summary}\n${formatEventTime(event)}`}
+                  title={`${event.subjectFullName || event.subject} (${event.type})\n${event.teacherFullName || event.teacher}\n${event.room}\n${formatEventTime(event)}`}
                   onClick={() => setModalEvent(event)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalEvent(event); } }}
                 >
-                  <span className="event-subject">{event.subject}</span>
+                  <span className="event-subject">{event.subjectFullName || event.subject}</span>
                   <span className="event-type">{event.type}</span>
                   <span className="event-time">{formatEventTime(event)}</span>
                   <span className="event-room">{event.room}</span>

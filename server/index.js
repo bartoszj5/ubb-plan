@@ -45,22 +45,46 @@ app.get('/api/faculties', async (req, res) => {
     }
 });
 
-// Get schedule in ICS format
+// Get schedule in ICS format with full names from legend
 app.get('/api/schedule/:type/:id', async (req, res) => {
     try {
         const { type, id } = req.params;
         const { week } = req.query;
 
-        let url = `/plan.php?type=${type}&id=${id}&cvsfile=true`;
+        let icsUrl = `/plan.php?type=${type}&id=${id}&cvsfile=true`;
+        let htmlUrl = `/plan.php?type=${type}&id=${id}&winW=2000&winH=1000`;
         if (week) {
-            url += `&w=${week}`;
+            icsUrl += `&w=${week}`;
+            htmlUrl += `&w=${week}`;
         }
 
-        const response = await fetchFromUBB(url);
-        const icsData = await response.text();
+        // Fetch ICS and HTML in parallel
+        const [icsRes, htmlRes] = await Promise.all([
+            fetchFromUBB(icsUrl),
+            fetchFromUBB(htmlUrl),
+        ]);
 
-        // Parse ICS to JSON
+        const [icsData, html] = await Promise.all([
+            icsRes.text(),
+            htmlRes.text(),
+        ]);
+
         const events = parseICS(icsData);
+        const { subjects, teachers } = parseScheduleHTMLMeta(html);
+
+        // Fetch teacher full names in parallel
+        const teacherFullNames = await fetchTeacherFullNames(teachers);
+
+        // Enrich events with full names
+        for (const event of events) {
+            if (event.subject && subjects[event.subject]) {
+                event.subjectFullName = subjects[event.subject];
+            }
+            if (event.teacher && teacherFullNames[event.teacher]) {
+                event.teacherFullName = teacherFullNames[event.teacher];
+            }
+        }
+
         res.json(events);
     } catch (error) {
         console.error('Error fetching schedule:', error);
@@ -87,6 +111,53 @@ app.get('/api/schedule-html/:type/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch schedule HTML' });
     }
 });
+
+// Parse subject and teacher info from schedule HTML page
+function parseScheduleHTMLMeta(html) {
+    const subjects = {};
+    const teachers = {};
+
+    const subjectRegex = /<strong>([^<]+)<\/strong>\s*-\s*([^,<]+)/g;
+    let match;
+    while ((match = subjectRegex.exec(html)) !== null) {
+        const abbr = match[1].trim();
+        const fullName = match[2].trim();
+        subjects[abbr] = fullName;
+    }
+
+    const teacherRegex = /<a[^>]*href="plan\.php\?type=10&(?:amp;)?id=(\d+)"[^>]*>([^<]+)<\/a>/g;
+    while ((match = teacherRegex.exec(html)) !== null) {
+        const id = match[1];
+        const abbr = match[2].trim();
+        if (!teachers[abbr]) {
+            teachers[abbr] = id;
+        }
+    }
+
+    return { subjects, teachers };
+}
+
+async function fetchTeacherFullNames(teacherMap) {
+    const entries = Object.entries(teacherMap);
+    if (entries.length === 0) return {};
+
+    const results = {};
+    await Promise.all(
+        entries.map(async ([abbr, id]) => {
+            try {
+                const res = await fetch(`${UBB_BASE_URL}/plan.php?type=10&id=${id}&winW=2000&winH=1000`);
+                const html = await res.text();
+                const titleMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);
+                if (titleMatch) {
+                    results[abbr] = titleMatch[1].trim();
+                }
+            } catch {
+                // Keep abbreviation if fetch fails
+            }
+        })
+    );
+    return results;
+}
 
 // Parse faculties from left_menu.php HTML
 function parseFaculties(html) {
