@@ -77,17 +77,32 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /\/api\/.*/i,
-            handler: 'NetworkFirst',
+            urlPattern: /\/api\/(faculties|tree|tree-index)/i,
+            handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'api-cache',
+              cacheName: 'api-tree-cache',
               expiration: {
-                maxEntries: 50,
+                maxEntries: 100,
                 maxAgeSeconds: 60 * 60 // 1 hour
               },
               cacheableResponse: {
                 statuses: [0, 200]
               }
+            }
+          },
+          {
+            urlPattern: /\/api\/schedule\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-schedule-cache',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 15 * 60 // 15 minutes
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              },
+              networkTimeoutSeconds: 5
             }
           }
         ]

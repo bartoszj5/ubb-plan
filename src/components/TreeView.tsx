@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { TreeNode } from '../types';
 import { fetchFaculties, fetchTreeBranch, fetchTreeIndex } from '../utils/api';
 import { BuildingIcon, FolderIcon, CalendarIcon, ChevronRightIcon, LoaderIcon, SearchIcon, XIcon } from './Icons';
@@ -43,7 +43,6 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const treeIndexRef = useRef<SearchResult[] | null>(null);
 
   useEffect(() => {
     loadFaculties();
@@ -59,10 +58,7 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
     setSearchLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const treeIndex: SearchResult[] = treeIndexRef.current ?? await fetchTreeIndex();
-        if (!treeIndexRef.current) {
-          treeIndexRef.current = treeIndex;
-        }
+        const treeIndex: SearchResult[] = await fetchTreeIndex();
         const term = searchTerm.toLowerCase();
         const results = treeIndex
           .filter(node => {
