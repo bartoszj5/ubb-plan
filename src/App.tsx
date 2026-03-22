@@ -97,6 +97,12 @@ function SchedulePage() {
     return meta?.path ?? [];
   });
 
+  // Save as last viewed plan
+  useEffect(() => {
+    if (!id || !scheduleType) return;
+    localStorage.setItem("ubb-last-plan", JSON.stringify({ type: scheduleType, id }));
+  }, [id, scheduleType]);
+
   // Fetch group metadata from API if not in localStorage
   useEffect(() => {
     if (!id || !scheduleType) return;
@@ -249,17 +255,27 @@ function App() {
 
     if (location.pathname === "/") {
       try {
-        const stored = localStorage.getItem("ubb-last-schedule");
-        if (stored) {
-          const parsed = JSON.parse(stored);
+        // Migrate old format
+        const oldStored = localStorage.getItem("ubb-last-schedule");
+        if (oldStored) {
+          const parsed = JSON.parse(oldStored);
           if (parsed?.type && parsed?.id && parsed?.name) {
             saveGroupMeta(parsed.id, {
               name: parsed.name,
               path: parsed.path ?? [],
               type: parsed.type,
             });
+            localStorage.setItem("ubb-last-plan", JSON.stringify({ type: parsed.type, id: parsed.id }));
             localStorage.removeItem("ubb-last-schedule");
-            navigate(`/plan/${parsed.type}/${parsed.id}`, { replace: true });
+          }
+        }
+
+        // Redirect to last viewed plan
+        const lastPlan = localStorage.getItem("ubb-last-plan");
+        if (lastPlan) {
+          const { type, id } = JSON.parse(lastPlan);
+          if (type && id) {
+            navigate(`/plan/${type}/${id}`, { replace: true });
           }
         }
       } catch {
