@@ -1,4 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  Routes,
+  Route,
+  useParams,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import TreeView from "./components/TreeView";
 import ScheduleGrid from "./components/ScheduleGrid";
 import Favorites from "./components/Favorites";
@@ -19,10 +26,9 @@ import {
   removeFavorite,
   isFavorite,
 } from "./utils/favorites";
+import { saveGroupMeta, getGroupMeta } from "./utils/groupMeta";
 import PWAUpdatePrompt from "./components/PWAUpdatePrompt";
 import "./App.css";
-
-const LAST_SCHEDULE_KEY = "ubb-last-schedule";
 
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
@@ -34,68 +40,84 @@ function getWeekStart(date: Date): Date {
 }
 
 function getUBBWeekNumber(weekStart: Date): number {
-  // Reference: w=758 = week starting Monday March 2, 2026
-  const refDate = new Date(2026, 2, 2); // March 2, 2026
+  const refDate = new Date(2026, 2, 2);
   refDate.setHours(0, 0, 0, 0);
   const diffMs = weekStart.getTime() - refDate.getTime();
   const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
   return 758 + diffWeeks;
 }
 
-function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem("ubb-dark-mode") === "true" ||
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-    );
-  });
-  const [favorites, setFavorites] = useState<FavoriteGroup[]>([]);
+function WelcomeScreen() {
+  return (
+    <div className="welcome-screen">
+      <div className="welcome-content">
+        <h2>Witaj w aplikacji Plan Zajęć UBB</h2>
+        <p>Wybierz grupę z menu po lewej stronie lub z ulubionych</p>
+        <div className="welcome-tips">
+          <div className="tip">
+            <span className="tip-icon-wrap">
+              <BuildingIcon size={22} />
+            </span>
+            <span>Kliknij na wydział, aby rozwinąć kierunki</span>
+          </div>
+          <div className="tip">
+            <span className="tip-icon-wrap">
+              <CalendarIcon size={22} />
+            </span>
+            <span>Wybierz grupe, aby zobaczyc plan</span>
+          </div>
+          <div className="tip">
+            <span className="tip-icon-wrap">
+              <StarIcon size={22} />
+            </span>
+            <span>Dodaj ulubione grupy dla szybkiego dostępu</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  const [selectedGroup, setSelectedGroup] = useState<{
-    type: string;
+function SchedulePage() {
+  const { scheduleType, id } = useParams<{
+    scheduleType: string;
     id: string;
-    name: string;
-    path: string[];
-  } | null>(null);
+  }>();
 
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setFavorites(getFavorites());
-    // Restore last viewed schedule
+  const meta = scheduleType && id ? getGroupMeta(id) : null;
+  const groupName = meta?.name ?? id ?? "";
+  const groupPath = meta?.path ?? [];
+
+  const loadSchedule = useCallback(async () => {
+    if (!scheduleType || !id) return;
+
+    setLoading(true);
+    setError(null);
+
     try {
-      const stored = localStorage.getItem(LAST_SCHEDULE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.type && parsed.id && parsed.name) {
-          setSelectedGroup(parsed);
-        }
-      }
-    } catch {
-      /* ignore */
+      const weekNumber = getUBBWeekNumber(weekStart);
+      const data = await fetchSchedule(scheduleType, id, weekNumber);
+      setEvents(data);
+    } catch (err) {
+      setError("Nie udało się wczytać planu zajęć");
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [scheduleType, id, weekStart]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    localStorage.setItem("ubb-dark-mode", String(darkMode));
-  }, [darkMode]);
+    loadSchedule();
+  }, [loadSchedule]);
 
-  useEffect(() => {
-    if (selectedGroup) {
-      localStorage.setItem(LAST_SCHEDULE_KEY, JSON.stringify(selectedGroup));
-      loadSchedule();
-    }
-  }, [selectedGroup, weekStart]);
-
-  // Keyboard shortcuts
+  // Keyboard shortcuts for week navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger when typing in inputs
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -108,78 +130,12 @@ function App() {
         handleNextWeek();
       } else if (e.key === "t" || e.key === "T") {
         handleGoToToday();
-      } else if (e.key === "Escape") {
-        setSidebarOpen(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  async function loadSchedule() {
-    if (!selectedGroup) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const weekNumber = getUBBWeekNumber(weekStart);
-      const data = await fetchSchedule(
-        selectedGroup.type,
-        selectedGroup.id,
-        weekNumber,
-      );
-      setEvents(data);
-    } catch (err) {
-      setError("Nie udało się wczytać planu zajęć");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const handleSelectSchedule = useCallback(
-    (type: string, id: string, name: string, path: string[]) => {
-      setSelectedGroup({ type, id, name, path });
-      setWeekStart(getWeekStart(new Date()));
-
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false);
-      }
-    },
-    [],
-  );
-
-  const handleSelectFavorite = useCallback((favorite: FavoriteGroup) => {
-    setSelectedGroup({
-      type: favorite.scheduleType,
-      id: favorite.id,
-      name: favorite.name,
-      path: favorite.path,
-    });
-    setWeekStart(getWeekStart(new Date()));
-
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-  }, []);
-
-  const handleToggleFavorite = useCallback(() => {
-    if (!selectedGroup) return;
-
-    if (isFavorite(selectedGroup.id)) {
-      setFavorites(removeFavorite(selectedGroup.id));
-    } else {
-      const newFavorite: FavoriteGroup = {
-        id: selectedGroup.id,
-        name: selectedGroup.name,
-        path: selectedGroup.path,
-        scheduleType: selectedGroup.type,
-      };
-      setFavorites(addFavorite(newFavorite));
-    }
-  }, [selectedGroup]);
 
   const handlePrevWeek = useCallback(() => {
     setWeekStart((prev) => {
@@ -201,6 +157,152 @@ function App() {
     setWeekStart(getWeekStart(new Date()));
   }, []);
 
+  const handleToggleFavorite = useCallback(() => {
+    if (!id || !scheduleType) return;
+
+    if (isFavorite(id)) {
+      removeFavorite(id);
+    } else {
+      const newFavorite: FavoriteGroup = {
+        id,
+        name: groupName,
+        path: groupPath,
+        scheduleType,
+      };
+      addFavorite(newFavorite);
+    }
+    // Force re-render by dispatching a storage event
+    window.dispatchEvent(new Event("favorites-changed"));
+  }, [id, scheduleType, groupName, groupPath]);
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loader"></div>
+        <p>Ladowanie planu zajęć...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="error-screen">
+        <p>{error}</p>
+        <button onClick={loadSchedule}>Sprobuj ponownie</button>
+      </div>
+    );
+  }
+
+  return (
+    <ScheduleGrid
+      events={events}
+      weekStart={weekStart}
+      groupName={groupName}
+      groupPath={groupPath}
+      onPrevWeek={handlePrevWeek}
+      onNextWeek={handleNextWeek}
+      onGoToToday={handleGoToToday}
+      onToggleFavorite={handleToggleFavorite}
+      isFavorite={id ? isFavorite(id) : false}
+    />
+  );
+}
+
+function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    return (
+      localStorage.getItem("ubb-dark-mode") === "true" ||
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+    );
+  });
+  const [favorites, setFavorites] = useState<FavoriteGroup[]>([]);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Migrate from old localStorage-based navigation & restore last schedule
+  useEffect(() => {
+    setFavorites(getFavorites());
+
+    if (location.pathname === "/") {
+      try {
+        const stored = localStorage.getItem("ubb-last-schedule");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.type && parsed?.id && parsed?.name) {
+            saveGroupMeta(parsed.id, {
+              name: parsed.name,
+              path: parsed.path ?? [],
+              type: parsed.type,
+            });
+            localStorage.removeItem("ubb-last-schedule");
+            navigate(`/plan/${parsed.type}/${parsed.id}`, { replace: true });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  // Listen for favorites changes from SchedulePage
+  useEffect(() => {
+    const handler = () => setFavorites(getFavorites());
+    window.addEventListener("favorites-changed", handler);
+    return () => window.removeEventListener("favorites-changed", handler);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("ubb-dark-mode", String(darkMode));
+  }, [darkMode]);
+
+  // Keyboard shortcut: Escape to close sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+
+      if (e.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleSelectSchedule = useCallback(
+    (type: string, id: string, name: string, path: string[]) => {
+      saveGroupMeta(id, { name, path, type });
+      navigate(`/plan/${type}/${id}`);
+
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
+    },
+    [navigate],
+  );
+
+  const handleSelectFavorite = useCallback(
+    (favorite: FavoriteGroup) => {
+      saveGroupMeta(favorite.id, {
+        name: favorite.name,
+        path: favorite.path,
+        type: favorite.scheduleType,
+      });
+      navigate(`/plan/${favorite.scheduleType}/${favorite.id}`);
+
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
+    },
+    [navigate],
+  );
+
   return (
     <div className="app">
       <PWAUpdatePrompt />
@@ -218,7 +320,14 @@ function App() {
             <MenuIcon size={18} />
           </button>
           <h1>
-            <img src="/logo.svg" alt="" width={22} height={22} className="header-logo" /> Plan Zajęć UBB
+            <img
+              src="/logo.svg"
+              alt=""
+              width={22}
+              height={22}
+              className="header-logo"
+            />{" "}
+            Plan Zajęć UBB
           </h1>
         </div>
         <div className="header-right">
@@ -257,56 +366,14 @@ function App() {
         </aside>
 
         <main className="main-content" id="main-content">
-          {!selectedGroup ? (
-            <div className="welcome-screen">
-              <div className="welcome-content">
-                <h2>Witaj w aplikacji Plan Zajęć UBB</h2>
-                <p>Wybierz grupę z menu po lewej stronie lub z ulubionych</p>
-                <div className="welcome-tips">
-                  <div className="tip">
-                    <span className="tip-icon-wrap">
-                      <BuildingIcon size={22} />
-                    </span>
-                    <span>Kliknij na wydział, aby rozwinąć kierunki</span>
-                  </div>
-                  <div className="tip">
-                    <span className="tip-icon-wrap">
-                      <CalendarIcon size={22} />
-                    </span>
-                    <span>Wybierz grupe, aby zobaczyc plan</span>
-                  </div>
-                  <div className="tip">
-                    <span className="tip-icon-wrap">
-                      <StarIcon size={22} />
-                    </span>
-                    <span>Dodaj ulubione grupy dla szybkiego dostępu</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : loading ? (
-            <div className="loading-screen">
-              <div className="loader"></div>
-              <p>Ladowanie planu zajęć...</p>
-            </div>
-          ) : error ? (
-            <div className="error-screen">
-              <p>{error}</p>
-              <button onClick={loadSchedule}>Sprobuj ponownie</button>
-            </div>
-          ) : (
-            <ScheduleGrid
-              events={events}
-              weekStart={weekStart}
-              groupName={selectedGroup.name}
-              groupPath={selectedGroup.path}
-              onPrevWeek={handlePrevWeek}
-              onNextWeek={handleNextWeek}
-              onGoToToday={handleGoToToday}
-              onToggleFavorite={handleToggleFavorite}
-              isFavorite={isFavorite(selectedGroup.id)}
+          <Routes>
+            <Route path="/" element={<WelcomeScreen />} />
+            <Route
+              path="/plan/:scheduleType/:id"
+              element={<SchedulePage />}
             />
-          )}
+            <Route path="*" element={<WelcomeScreen />} />
+          </Routes>
         </main>
       </div>
     </div>
