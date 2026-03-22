@@ -92,6 +92,26 @@ app.get('/api/schedule/:type/:id', async (req, res) => {
     }
 });
 
+// Get group name and path from schedule page
+app.get('/api/group-info/:type/:id', async (req, res) => {
+    try {
+        const { type, id } = req.params;
+        const htmlRes = await fetchFromUBB(`/plan.php?type=${type}&id=${id}&winW=2000&winH=1000`);
+        const html = await htmlRes.text();
+        const info = parseGroupTitle(html);
+
+        if (!info) {
+            res.status(404).json({ error: 'Group not found' });
+            return;
+        }
+
+        res.json(info);
+    } catch (error) {
+        console.error('Error fetching group info:', error);
+        res.status(500).json({ error: 'Failed to fetch group info' });
+    }
+});
+
 // Get schedule HTML (for week info)
 app.get('/api/schedule-html/:type/:id', async (req, res) => {
     try {
@@ -111,6 +131,17 @@ app.get('/api/schedule-html/:type/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch schedule HTML' });
     }
 });
+
+// Parse group title from schedule HTML page
+function parseGroupTitle(html) {
+    const match = html.match(/class=["']?title["']?[^>]*>\s*(.*?)\s*<\/div>/);
+    if (!match) return null;
+    const raw = match[1].trim();
+    const parts = raw.split(/\s*\\\s*/);
+    const path = parts.slice(1);
+    const name = path.length > 0 ? path[path.length - 1] : raw;
+    return { name, path };
+}
 
 // Parse subject and teacher info from schedule HTML page
 function parseScheduleHTMLMeta(html) {

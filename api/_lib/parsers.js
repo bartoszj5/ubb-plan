@@ -95,6 +95,19 @@ function parseICSDate(dateStr) {
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${suffix}`;
 }
 
+export function parseGroupTitle(html) {
+  // Extracts group title from: <div class=title ...>Grupy \ Wydział ... \ GroupName</div>
+  const match = html.match(/class=["']?title["']?[^>]*>\s*(.*?)\s*<\/div>/);
+  if (!match) return null;
+  const raw = match[1].trim();
+  // Path segments separated by " \ "
+  const parts = raw.split(/\s*\\\s*/);
+  // First part is the type label (e.g. "Grupy"), skip it
+  const path = parts.slice(1);
+  const name = path.length > 0 ? path[path.length - 1] : raw;
+  return { name, path };
+}
+
 export function parseScheduleHTMLMeta(html) {
   const subjects = {};
   const teachers = {};

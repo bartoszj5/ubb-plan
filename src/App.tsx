@@ -19,7 +19,7 @@ import {
   StarIcon,
 } from "./components/Icons";
 import type { ScheduleEvent, FavoriteGroup } from "./types";
-import { fetchSchedule } from "./utils/api";
+import { fetchSchedule, fetchGroupInfo } from "./utils/api";
 import {
   getFavorites,
   addFavorite,
@@ -88,10 +88,33 @@ function SchedulePage() {
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [groupName, setGroupName] = useState(() => {
+    const meta = id ? getGroupMeta(id) : null;
+    return meta?.name ?? id ?? "";
+  });
+  const [groupPath, setGroupPath] = useState<string[]>(() => {
+    const meta = id ? getGroupMeta(id) : null;
+    return meta?.path ?? [];
+  });
 
-  const meta = scheduleType && id ? getGroupMeta(id) : null;
-  const groupName = meta?.name ?? id ?? "";
-  const groupPath = meta?.path ?? [];
+  // Fetch group metadata from API if not in localStorage
+  useEffect(() => {
+    if (!id || !scheduleType) return;
+    const meta = getGroupMeta(id);
+    if (meta) {
+      setGroupName(meta.name);
+      setGroupPath(meta.path);
+      return;
+    }
+
+    fetchGroupInfo(scheduleType, id)
+      .then((info) => {
+        saveGroupMeta(id, { name: info.name, path: info.path, type: scheduleType });
+        setGroupName(info.name);
+        setGroupPath(info.path);
+      })
+      .catch(() => {/* ignore */});
+  }, [id, scheduleType]);
 
   const loadSchedule = useCallback(async () => {
     if (!scheduleType || !id) return;

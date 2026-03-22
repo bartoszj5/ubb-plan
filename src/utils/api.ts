@@ -53,6 +53,18 @@ export async function fetchTreeIndex() {
   return data;
 }
 
+export async function fetchGroupInfo(type: string, id: string): Promise<{ name: string; path: string[] }> {
+  const CACHE_KEY = `ubb-group-info:${type}:${id}`;
+  const cached = getMemoryCache<{ name: string; path: string[] }>(CACHE_KEY, TWENTY_FOUR_HOURS);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_BASE}/api/group-info/${type}/${id}`);
+  if (!response.ok) throw new Error('Failed to fetch group info');
+  const data = await response.json();
+  setMemoryCache(CACHE_KEY, data);
+  return data;
+}
+
 export async function fetchSchedule(type: string, id: string, week?: number) {
   const CACHE_KEY = `ubb-schedule:${type}:${id}:${week || 'current'}`;
   const cached = getSessionCache(CACHE_KEY);
