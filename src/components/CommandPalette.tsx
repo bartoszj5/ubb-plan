@@ -185,7 +185,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                         : result.path.slice(0, -1).join(' \u203A ')}
                     </span>
                   </div>
-                  <kbd className="cmd-result-hint">\u23CE</kbd>
+                  <kbd className="cmd-result-hint">{'\u23CE'}</kbd>
                 </div>
               ))
             ) : query.length >= 2 ? (
@@ -195,8 +195,8 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
         )}
 
         <div className="cmd-footer">
-          <span><kbd>\u2191</kbd><kbd>\u2193</kbd> nawigacja</span>
-          <span><kbd>\u23CE</kbd> wybierz</span>
+          <span><kbd>{'\u2191'}</kbd><kbd>{'\u2193'}</kbd> nawigacja</span>
+          <span><kbd>{'\u23CE'}</kbd> wybierz</span>
           <span><kbd>ESC</kbd> zamknij</span>
         </div>
       </div>

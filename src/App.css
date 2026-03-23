@@ -360,8 +360,13 @@
     justify-content: center;
   }
 
-  .cmd-palette-trigger {
+  .cmd-palette-trigger span {
     display: none;
+  }
+
+  .cmd-palette-trigger {
+    padding: 6px 8px;
+    gap: 0;
   }
 
   .sidebar-backdrop {
