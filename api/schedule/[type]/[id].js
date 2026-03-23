@@ -28,13 +28,16 @@ export default async function handler(request, response) {
     // Fetch teacher full names in parallel
     const teacherFullNames = await fetchTeacherFullNames(teachers);
 
-    // Enrich events with full names
+    // Enrich events with full names and teacher IDs
     for (const event of events) {
       if (event.subject && subjects[event.subject]) {
         event.subjectFullName = subjects[event.subject];
       }
       if (event.teacher && teacherFullNames[event.teacher]) {
         event.teacherFullName = teacherFullNames[event.teacher];
+      }
+      if (event.teacher && teachers[event.teacher]) {
+        event.teacherId = teachers[event.teacher];
       }
     }
 

@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import type { ScheduleEvent } from '../types';
 import { XIcon, ClockIcon, UserIcon, MapPinIcon, InfoIcon, WifiIcon } from './Icons';
+import { saveGroupMeta } from '../utils/groupMeta';
 import './EventModal.css';
 
 interface EventModalProps {
@@ -38,6 +40,7 @@ function getTypeColor(type: string): string {
 export default function EventModal({ event, onClose }: EventModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -119,7 +122,25 @@ export default function EventModal({ event, onClose }: EventModalProps) {
               <UserIcon size={16} />
               <div>
                 <div className="event-modal-label">Prowadzący</div>
-                <div className="event-modal-value">{event.teacherFullName || event.teacher}</div>
+                {event.teacherId ? (
+                  <button
+                    className="event-modal-value event-modal-teacher-link"
+                    onClick={() => {
+                      const teacherName = event.teacherFullName || event.teacher;
+                      saveGroupMeta(event.teacherId!, {
+                        name: teacherName,
+                        path: ['Nauczyciele', teacherName],
+                        type: '10',
+                      });
+                      navigate(`/plan/10/${event.teacherId}`);
+                      onClose();
+                    }}
+                  >
+                    {event.teacherFullName || event.teacher}
+                  </button>
+                ) : (
+                  <div className="event-modal-value">{event.teacherFullName || event.teacher}</div>
+                )}
               </div>
             </div>
           )}

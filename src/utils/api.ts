@@ -65,6 +65,24 @@ export async function fetchGroupInfo(type: string, id: string): Promise<{ name: 
   return data;
 }
 
+export interface SearchResult {
+  id: string;
+  name: string;
+  scheduleType: string;
+  resultType: 'teacher' | 'group' | 'room';
+}
+
+export async function searchPlans(query: string, type?: string): Promise<SearchResult[]> {
+  if (query.length < 2) return [];
+
+  let url = `${API_BASE}/api/search?q=${encodeURIComponent(query)}`;
+  if (type) url += `&type=${encodeURIComponent(type)}`;
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Search failed');
+  return response.json();
+}
+
 export async function fetchSchedule(type: string, id: string, week?: number) {
   const CACHE_KEY = `ubb-schedule:${type}:${id}:${week || 'current'}`;
   const cached = getSessionCache(CACHE_KEY);

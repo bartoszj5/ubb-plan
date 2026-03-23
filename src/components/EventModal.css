@@ -157,6 +157,24 @@
   font-weight: 400;
 }
 
+/* Clickable teacher link */
+.event-modal-teacher-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+.event-modal-teacher-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
 /* Copy button */
 .event-modal-copy-btn {
   display: inline-flex;

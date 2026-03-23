@@ -122,6 +122,7 @@ export function parseScheduleHTMLMeta(html) {
   }
 
   // Parse teacher links: <a href="plan.php?type=10&amp;id=91259">SWą</a>
+  // teachers maps abbreviation -> id
   const teacherRegex = /<a[^>]*href="plan\.php\?type=10&(?:amp;)?id=(\d+)"[^>]*>([^<]+)<\/a>/g;
   while ((match = teacherRegex.exec(html)) !== null) {
     const id = match[1];

@@ -20,6 +20,7 @@ export interface ScheduleEvent {
   description?: string;
   subjectFullName?: string;
   teacherFullName?: string;
+  teacherId?: string;
 }
 
 export interface FavoriteGroup {

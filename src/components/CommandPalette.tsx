@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SearchIcon, CalendarIcon, XIcon } from './Icons';
-import { fetchTreeIndex } from '../utils/api';
+import { SearchIcon, CalendarIcon, UserIcon, XIcon } from './Icons';
+import { fetchTreeIndex, searchPlans } from '../utils/api';
 import { saveGroupMeta } from '../utils/groupMeta';
 import './CommandPalette.css';
 
@@ -12,6 +12,7 @@ interface SearchResult {
   scheduleType: string | null;
   hasChildren: boolean;
   path: string[];
+  resultType?: 'teacher' | 'group' | 'room';
 }
 
 interface CommandPaletteProps {
@@ -46,8 +47,14 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const treeIndex: SearchResult[] = await fetchTreeIndex();
         const term = query.toLowerCase();
+
+        // Search tree index (groups) and UBB search API (teachers) in parallel
+        const [treeIndex, teacherResults] = await Promise.all([
+          fetchTreeIndex() as Promise<SearchResult[]>,
+          searchPlans(query, 'teacher').catch(() => []),
+        ]);
+
         const filtered = treeIndex
           .filter(node => {
             if (node.name.toLowerCase().includes(term)) return true;
@@ -61,8 +68,23 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
             if (aName !== bName) return aName - bName;
             return a.name.localeCompare(b.name, 'pl');
           })
-          .slice(0, 20);
-        setResults(filtered);
+          .slice(0, 15)
+          .map(node => ({ ...node, resultType: 'group' as const }));
+
+        // Convert teacher results to SearchResult format
+        const teachers: SearchResult[] = teacherResults.map(t => ({
+          id: t.id,
+          name: t.name,
+          type: 'schedule' as const,
+          scheduleType: t.scheduleType,
+          hasChildren: false,
+          path: ['Nauczyciele'],
+          resultType: 'teacher' as const,
+        }));
+
+        // Combine: teachers first if query looks like a name, otherwise groups first
+        const combined = [...teachers, ...filtered].slice(0, 20);
+        setResults(combined);
         setSelectedIndex(0);
       } catch {
         /* ignore */
@@ -124,7 +146,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
             ref={inputRef}
             type="text"
             className="cmd-input"
-            placeholder="Szukaj grupy, kierunku, planu..."
+            placeholder="Szukaj grupy, nauczyciela, kierunku..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -145,16 +167,22 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
             ) : results.length > 0 ? (
               results.map((result, i) => (
                 <div
-                  key={result.id}
+                  key={`${result.resultType}-${result.id}`}
                   className={`cmd-result ${i === selectedIndex ? 'selected' : ''}`}
                   onClick={() => handleSelect(result)}
                   onMouseEnter={() => setSelectedIndex(i)}
                 >
-                  <CalendarIcon size={14} className="cmd-result-icon" />
+                  {result.resultType === 'teacher' ? (
+                    <UserIcon size={14} className="cmd-result-icon" />
+                  ) : (
+                    <CalendarIcon size={14} className="cmd-result-icon" />
+                  )}
                   <div className="cmd-result-info">
                     <span className="cmd-result-name">{result.name}</span>
                     <span className="cmd-result-path">
-                      {result.path.slice(0, -1).join(' \u203A ')}
+                      {result.resultType === 'teacher'
+                        ? 'Nauczyciel'
+                        : result.path.slice(0, -1).join(' \u203A ')}
                     </span>
                   </div>
                   <kbd className="cmd-result-hint">\u23CE</kbd>
