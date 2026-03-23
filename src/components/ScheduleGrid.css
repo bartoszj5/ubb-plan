@@ -45,7 +45,7 @@
   border: none;
   cursor: pointer;
   color: var(--text-tertiary);
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), transform var(--transition-fast);
   padding: 4px;
   line-height: 0;
   border-radius: var(--radius-sm);
@@ -84,7 +84,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
   letter-spacing: 0.3px;
 }
 
@@ -107,7 +107,7 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 500;
@@ -137,7 +137,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 700;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
@@ -331,12 +331,10 @@
   overflow: hidden;
   font-size: 11px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   box-sizing: border-box;
   gap: 2px;
   border-left: 4px solid var(--event-color);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Dark mode event blocks */
@@ -381,13 +379,14 @@
 /* "Now playing" glow */
 .event-block.event-now {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-color) 40%, transparent),
-              0 0 16px color-mix(in srgb, var(--event-color) 20%, transparent);
+              0 0 12px color-mix(in srgb, var(--event-color) 15%, transparent);
   animation: nowPulse 3s ease-in-out infinite;
+  will-change: opacity;
 }
 
 @keyframes nowPulse {
-  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-color) 40%, transparent), 0 0 12px color-mix(in srgb, var(--event-color) 15%, transparent); }
-  50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--event-color) 50%, transparent), 0 0 20px color-mix(in srgb, var(--event-color) 25%, transparent); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
 /* Event text hierarchy */
@@ -505,20 +504,14 @@
   font-size: 9px;
 }
 
-/* Staggered entrance animation */
+/* Entrance animation — lightweight opacity-only fade */
 .event-block {
-  animation: eventSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: eventFadeIn 0.2s ease both;
 }
 
-@keyframes eventSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes eventFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ==================== Skeleton Loader ==================== */
@@ -627,7 +620,7 @@
     cursor: pointer;
     color: var(--text-tertiary);
     font-family: 'Inter', sans-serif;
-    transition: all var(--transition-fast);
+    transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
     gap: 2px;
     position: relative;
   }

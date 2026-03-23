@@ -59,7 +59,7 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .favorite-item:hover {
@@ -106,7 +106,7 @@
   cursor: pointer;
   padding: 4px 6px;
   opacity: 0;
-  transition: all var(--transition-fast);
+  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
   border-radius: var(--radius-sm);
   line-height: 0;
   display: flex;

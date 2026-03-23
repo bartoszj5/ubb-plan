@@ -33,8 +33,6 @@
   padding: 0 20px;
   height: 56px;
   background: var(--header-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   color: var(--header-text);
   z-index: 100;
   border-bottom: 1px solid var(--header-border);
@@ -73,7 +71,7 @@
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
   line-height: 0;
 }
 
@@ -97,7 +95,7 @@
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   line-height: 0;
   display: flex;
   align-items: center;
@@ -334,7 +332,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 600;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast);
 }
 
 .error-screen button:hover {
@@ -371,8 +369,6 @@
     position: fixed;
     inset: 56px 0 0 0;
     background: var(--backdrop-color);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
     z-index: 40;
     animation: fadeIn 0.2s ease-out;
   }
