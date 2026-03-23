@@ -6,7 +6,7 @@ export default async function handler(request, response) {
 
     const htmlRes = await fetchFromUBB(`/plan.php?type=${type}&id=${id}&winW=2000&winH=1000`);
     const html = await htmlRes.text();
-    const info = parseGroupTitle(html);
+    const info = parseGroupTitle(html, type);
 
     if (!info) {
       response.status(404).json({ error: 'Group not found' });

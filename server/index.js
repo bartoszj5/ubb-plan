@@ -227,7 +227,7 @@ app.get('/api/group-info/:type/:id', async (req, res) => {
         const { type, id } = req.params;
         const htmlRes = await fetchFromUBB(`/plan.php?type=${type}&id=${id}&winW=2000&winH=1000`);
         const html = await htmlRes.text();
-        const info = parseGroupTitle(html);
+        const info = parseGroupTitle(html, type);
 
         if (!info) {
             res.status(404).json({ error: 'Group not found' });

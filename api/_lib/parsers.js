@@ -1,4 +1,4 @@
-const UBB_BASE_URL = 'https://plany.ubb.edu.pl';
+const UBB_BASE_URL = "https://plany.ubb.edu.pl";
 
 export async function fetchFromUBB(path) {
   const response = await fetch(`${UBB_BASE_URL}${path}`);
@@ -14,7 +14,7 @@ export function parseFaculties(html) {
     faculties.push({
       id: match[1],
       name: match[2],
-      type: 'faculty',
+      type: "faculty",
       hasChildren: true,
     });
   }
@@ -43,9 +43,9 @@ export function parseTreeNodes(html, parentId) {
     nodes.push({
       id: id,
       name: match[5].trim(),
-      type: 'schedule',
+      type: "schedule",
       scheduleType: match[3],
-      hasChildren: match[2] === '1',
+      hasChildren: match[2] === "1",
       parentId,
     });
   }
@@ -57,8 +57,8 @@ export function parseTreeNodes(html, parentId) {
       nodes.push({
         id: id,
         name: match[3].trim(),
-        type: 'branch',
-        isLeaf: match[2] === '1',
+        type: "branch",
+        isLeaf: match[2] === "1",
         hasChildren: true,
         parentId,
       });
@@ -72,7 +72,7 @@ export function parseTreeNodes(html, parentId) {
       nodes.push({
         id: id,
         name: match[3].trim(),
-        type: 'schedule',
+        type: "schedule",
         scheduleType: match[1],
         hasChildren: false,
         parentId,
@@ -91,20 +91,29 @@ function parseICSDate(dateStr) {
   const minute = dateStr.substring(11, 13);
   const second = dateStr.substring(13, 15);
 
-  const suffix = dateStr.endsWith('Z') ? 'Z' : '';
+  const suffix = dateStr.endsWith("Z") ? "Z" : "";
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${suffix}`;
 }
 
-export function parseGroupTitle(html) {
+export function parseGroupTitle(html, type) {
   // Extracts group title from: <div class=title ...>Grupy \ Wydział ... \ GroupName</div>
   const match = html.match(/class=["']?title["']?[^>]*>\s*(.*?)\s*<\/div>/);
   if (!match) return null;
   const raw = match[1].trim();
   // Path segments separated by " \ "
   const parts = raw.split(/\s*\\\s*/);
-  // First part is the type label (e.g. "Grupy"), skip it
+  // First part is the type label (e.g. "Grupy", "Prowadzący"), skip it
   const path = parts.slice(1);
-  const name = path.length > 0 ? path[path.length - 1] : raw;
+  let name = path.length > 0 ? path[path.length - 1] : raw;
+
+  // For teacher pages (type=10), extract the actual name from the heading
+  if (String(type) === '10') {
+    const teacherMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);
+    if (teacherMatch) {
+      name = teacherMatch[1].trim();
+    }
+  }
+
   return { name, path };
 }
 
@@ -121,9 +130,9 @@ export function parseScheduleHTMLMeta(html) {
     subjects[abbr] = fullName;
   }
 
-  // Parse teacher links: <a href="plan.php?type=10&amp;id=91259">SWą</a>
   // teachers maps abbreviation -> id
-  const teacherRegex = /<a[^>]*href="plan\.php\?type=10&(?:amp;)?id=(\d+)"[^>]*>([^<]+)<\/a>/g;
+  const teacherRegex =
+    /<a[^>]*href="plan\.php\?type=10&(?:amp;)?id=(\d+)"[^>]*>([^<]+)<\/a>/g;
   while ((match = teacherRegex.exec(html)) !== null) {
     const id = match[1];
     const abbr = match[2].trim();
@@ -149,7 +158,9 @@ export async function fetchTeacherFullNames(teacherMap) {
         return;
       }
       try {
-        const res = await fetch(`https://plany.ubb.edu.pl/plan.php?type=10&id=${id}&winW=2000&winH=1000`);
+        const res = await fetch(
+          `https://plany.ubb.edu.pl/plan.php?type=10&id=${id}&winW=2000&winH=1000`,
+        );
         const html = await res.text();
         const titleMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);
         if (titleMatch) {
@@ -160,14 +171,14 @@ export async function fetchTeacherFullNames(teacherMap) {
       } catch {
         // Keep abbreviation if fetch fails
       }
-    })
+    }),
   );
   return results;
 }
 
 export function parseICS(icsData) {
   const events = [];
-  const eventBlocks = icsData.split('BEGIN:VEVENT').slice(1);
+  const eventBlocks = icsData.split("BEGIN:VEVENT").slice(1);
 
   for (const block of eventBlocks) {
     const event = {};
@@ -188,12 +199,12 @@ export function parseICS(icsData) {
       const summaryText = summary[1].trim();
       event.summary = summaryText;
 
-      const parts = summaryText.split(' ');
+      const parts = summaryText.split(" ");
       if (parts.length >= 1) {
         event.subject = parts[0];
-        event.type = parts[1] || '';
-        event.teacher = parts[2] || '';
-        event.room = parts.slice(3).join(' ') || '';
+        event.type = parts[1] || "";
+        event.teacher = parts[2] || "";
+        event.room = parts.slice(3).join(" ") || "";
       }
     }
     if (location) {
