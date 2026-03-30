@@ -29,6 +29,7 @@ import {
   isFavorite,
 } from "./utils/favorites";
 import { saveGroupMeta, getGroupMeta } from "./utils/groupMeta";
+import Notices from "./components/Notices";
 import PWAUpdatePrompt from "./components/PWAUpdatePrompt";
 import "./App.css";
 
@@ -436,6 +437,7 @@ function App() {
             </h3>
             <TreeView onSelectSchedule={handleSelectSchedule} />
           </div>
+          <Notices />
         </aside>
 
         <main className="main-content" id="main-content">
