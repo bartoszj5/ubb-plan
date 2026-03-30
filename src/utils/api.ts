@@ -83,6 +83,24 @@ export async function searchPlans(query: string, type?: string): Promise<SearchR
   return response.json();
 }
 
+export interface Notice {
+  title: string;
+  description: string;
+  items: string[];
+}
+
+export async function fetchNotices(): Promise<Notice[]> {
+  const CACHE_KEY = 'ubb-notices';
+  const cached = getMemoryCache<Notice[]>(CACHE_KEY, ONE_HOUR);
+  if (cached) return cached;
+
+  const response = await fetch(`${API_BASE}/api/notices`);
+  if (!response.ok) throw new Error('Failed to fetch notices');
+  const data = await response.json();
+  setMemoryCache(CACHE_KEY, data);
+  return data;
+}
+
 export async function fetchSchedule(type: string, id: string, week?: number) {
   const CACHE_KEY = `ubb-schedule:${type}:${id}:${week || 'current'}`;
   const cached = getSessionCache(CACHE_KEY);

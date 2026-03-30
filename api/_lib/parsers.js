@@ -176,6 +176,54 @@ export async function fetchTeacherFullNames(teacherMap) {
   return results;
 }
 
+export function parseNotices(html) {
+  const notices = [];
+
+  // Match "Uwaga do planów dla studiów stacjonarnych" section
+  const stacjonarneMatch = html.match(
+    /<b>Uwaga do planów dla studiów stacjonarnych[^<]*<\/b>\s*([\s\S]*?)(?=<br>\s*<br>\s*<b>Uwaga|<!-- ten tekst)/
+  );
+  if (stacjonarneMatch) {
+    const block = stacjonarneMatch[0];
+    const titleMatch = block.match(/<b>(Uwaga do planów dla studiów stacjonarnych[^<]*)<\/b>/);
+    const title = titleMatch ? titleMatch[1].replace(/,\s*$/, '').trim() : 'Studia stacjonarne';
+    const descMatch = block.match(/<\/b>\s*([^<]+)/);
+    const description = descMatch ? descMatch[1].trim().replace(/:\s*$/, '') : '';
+    const items = [];
+    const liRegex = /<li>(?:<b>([^<]*)<\/b>)?\s*(.*?)<\/li>/g;
+    let m;
+    while ((m = liRegex.exec(block)) !== null) {
+      const bold = m[1] ? m[1].trim() : '';
+      const rest = m[2] ? m[2].trim().replace(/[,;]\s*$/, '') : '';
+      items.push(bold ? `${bold} ${rest}` : rest);
+    }
+    notices.push({ title, description, items });
+  }
+
+  // Match "Uwaga do planów dla studiów zaocznych" section
+  const zaoczneMatch = html.match(
+    /<b>Uwaga do planów dla studiów zaocznych[^<]*<\/b>\s*([\s\S]*?)(?=Brakujące|<!-- ten tekst)/
+  );
+  if (zaoczneMatch) {
+    const block = zaoczneMatch[0];
+    const title = 'Uwaga do planów dla studiów zaocznych';
+    // Get description text between </b> and first <li>
+    const descMatch = block.match(/<\/b>\s*(?:<br>)?\s*([\s\S]*?)(?=<li>)/);
+    const description = descMatch
+      ? descMatch[1].replace(/<br>/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
+      : '';
+    const items = [];
+    const liRegex = /<li>\s*(.*?)<\/li>/g;
+    let m;
+    while ((m = liRegex.exec(block)) !== null) {
+      items.push(m[1].trim().replace(/[,;]\s*$/, ''));
+    }
+    notices.push({ title, description, items });
+  }
+
+  return notices;
+}
+
 export function parseICS(icsData) {
   const events = [];
   const eventBlocks = icsData.split("BEGIN:VEVENT").slice(1);

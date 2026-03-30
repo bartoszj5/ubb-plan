@@ -7,6 +7,7 @@ import {
     parseGroupTitle,
     parseScheduleHTMLMeta,
     parseICS,
+    parseNotices,
     fetchTeacherFullNames,
 } from '../api/_lib/parsers.js';
 
@@ -29,6 +30,10 @@ const branchCache = new Map();
 
 let treeIndexCache = null;
 let treeIndexCacheTs = 0;
+
+let noticesCache = null;
+let noticesCacheTs = 0;
+const NOTICES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
 // ── Concurrency limiter (for tree-index crawl) ─────────────────────────────
 
@@ -171,6 +176,23 @@ app.get('/api/tree-index', async (req, res) => {
     } catch (error) {
         console.error('Error building tree index:', error);
         res.status(500).json({ error: 'Failed to build tree index' });
+    }
+});
+
+// Get notices/remarks from main page
+app.get('/api/notices', async (req, res) => {
+    try {
+        const now = Date.now();
+        if (!noticesCache || now - noticesCacheTs > NOTICES_CACHE_TTL) {
+            const response = await fetchFromUBB('/main.php');
+            const html = await response.text();
+            noticesCache = parseNotices(html);
+            noticesCacheTs = now;
+        }
+        res.json(noticesCache);
+    } catch (error) {
+        console.error('Error fetching notices:', error);
+        res.status(500).json({ error: 'Failed to fetch notices' });
     }
 });
 
