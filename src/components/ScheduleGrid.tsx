@@ -53,12 +53,17 @@ function getTypeColor(type: string): string {
   return '#6366F1';
 }
 
-function formatWeekRange(start: Date): string {
+function formatWeekRange(start: Date, includeWeekend: boolean): string {
   const end = new Date(start);
-  end.setDate(end.getDate() + 4); // Mon-Fri
+  end.setDate(end.getDate() + (includeWeekend ? 6 : 4));
   const startStr = start.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
   const endStr = end.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
   return `${startStr} – ${endStr}`;
+}
+
+function getDayIndex(date: Date): number {
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -96,29 +101,32 @@ export default function ScheduleGrid({
   const todayIndex = useMemo(() => {
     return weekDates.findIndex(d => isSameDay(d, today));
   }, [weekDates, today]);
+  const weekStartTime = weekStart.getTime();
+
+  const hasWeekendEvents = useMemo(() => {
+    return events.some(event => {
+      const eventDate = new Date(event.start);
+      const dayIndex = getDayIndex(eventDate);
+      return dayIndex >= 5 && weekDates[dayIndex] && isSameDay(eventDate, weekDates[dayIndex]);
+    });
+  }, [events, weekDates]);
 
   // Mobile day view
-  const [mobileViewDay, setMobileViewDay] = useState(() => {
+  const [mobileView, setMobileView] = useState(() => {
     const now = new Date();
-    const day = now.getDay();
-    return day === 0 ? 6 : day - 1;
+    return {
+      weekStartTime,
+      day: getDayIndex(now),
+    };
   });
 
-  // Reset mobile day when week changes
-  const swipeWeekChangeRef = useRef(false);
-  useEffect(() => {
-    if (swipeWeekChangeRef.current) {
-      swipeWeekChangeRef.current = false;
-      return;
-    }
-    if (todayIndex >= 0) {
-      setMobileViewDay(todayIndex);
-    } else {
-      setMobileViewDay(0);
-    }
-  }, [weekStart, todayIndex]);
-
-  const displayDays = showWeekend ? 7 : 5;
+  const displayWeekend = showWeekend || hasWeekendEvents;
+  const displayDays = displayWeekend ? 7 : 5;
+  const defaultMobileViewDay = todayIndex >= 0 ? todayIndex : 0;
+  const selectedMobileViewDay = mobileView.weekStartTime === weekStartTime
+    ? mobileView.day
+    : defaultMobileViewDay;
+  const activeMobileViewDay = Math.min(selectedMobileViewDay, displayDays - 1);
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -138,21 +146,25 @@ export default function ScheduleGrid({
     if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
 
     if (dx < 0) {
-      setMobileViewDay(prev => {
-        if (prev < displayDays - 1) return prev + 1;
-        swipeWeekChangeRef.current = true;
-        onNextWeek();
-        return 0;
-      });
+      if (activeMobileViewDay < displayDays - 1) {
+        setMobileView({ weekStartTime, day: activeMobileViewDay + 1 });
+        return;
+      }
+      const nextWeek = new Date(weekStart);
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      setMobileView({ weekStartTime: nextWeek.getTime(), day: 0 });
+      onNextWeek();
     } else {
-      setMobileViewDay(prev => {
-        if (prev > 0) return prev - 1;
-        swipeWeekChangeRef.current = true;
-        onPrevWeek();
-        return displayDays - 1;
-      });
+      if (activeMobileViewDay > 0) {
+        setMobileView({ weekStartTime, day: activeMobileViewDay - 1 });
+        return;
+      }
+      const prevWeek = new Date(weekStart);
+      prevWeek.setDate(prevWeek.getDate() - 7);
+      setMobileView({ weekStartTime: prevWeek.getTime(), day: displayDays - 1 });
+      onPrevWeek();
     }
-  }, [displayDays, onNextWeek, onPrevWeek]);
+  }, [activeMobileViewDay, displayDays, onNextWeek, onPrevWeek, weekStart, weekStartTime]);
 
   // Compute dynamic hour range based on events
   const { startHour, endHour, totalHours, hours } = useMemo(() => {
@@ -210,6 +222,8 @@ export default function ScheduleGrid({
     return () => clearInterval(interval);
   }, [todayIndex, startHour, endHour, totalHours]);
 
+  const shouldScrollToTimeIndicator = events.length > 0 && timeIndicatorPos !== null;
+
   // Scroll to current time on mount
   useEffect(() => {
     if (timeIndicatorPos !== null && gridRef.current) {
@@ -218,7 +232,7 @@ export default function ScheduleGrid({
       const scrollTarget = (timeIndicatorPos / 100) * totalHeight - container.clientHeight / 3;
       container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
     }
-  }, [events.length > 0 && timeIndicatorPos !== null]);
+  }, [shouldScrollToTimeIndicator, timeIndicatorPos]);
 
   // Check if an event is happening now
   const isEventNow = useCallback((event: ScheduleEvent): boolean => {
@@ -235,8 +249,7 @@ export default function ScheduleGrid({
     const rawEventsByDay: Map<number, ScheduleEvent[]> = new Map();
     events.forEach(event => {
       const eventDate = new Date(event.start);
-      const dayOfWeek = eventDate.getDay();
-      const dayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const dayIndex = getDayIndex(eventDate);
 
       if (!rawEventsByDay.has(dayIndex)) {
         rawEventsByDay.set(dayIndex, []);
@@ -367,10 +380,14 @@ export default function ScheduleGrid({
         <div className="schedule-controls">
           <button
             className="weekend-toggle"
-            onClick={() => setShowWeekend(w => !w)}
-            aria-label={showWeekend ? 'Ukryj weekend' : 'Pokaż weekend'}
+            onClick={() => {
+              if (!hasWeekendEvents) {
+                setShowWeekend(w => !w);
+              }
+            }}
+            aria-label={displayWeekend ? 'Ukryj weekend' : 'Pokaż weekend'}
           >
-            {showWeekend ? 'Pn–Nd' : 'Pn–Pt'}
+            {displayWeekend ? 'Pn–Nd' : 'Pn–Pt'}
           </button>
           <div className="week-navigation">
             <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzień">
@@ -379,7 +396,7 @@ export default function ScheduleGrid({
             <button onClick={onGoToToday} className="today-btn">
               Dziś
             </button>
-            <span className="week-label">{formatWeekRange(weekStart)}</span>
+            <span className="week-label">{formatWeekRange(weekStart, displayWeekend)}</span>
             <button onClick={onNextWeek} className="nav-btn" aria-label="Następny tydzień">
               <ChevronRightIcon size={16} />
             </button>
@@ -393,9 +410,9 @@ export default function ScheduleGrid({
           <button
             key={i}
             role="tab"
-            aria-selected={mobileViewDay === i}
-            className={`mobile-day-tab ${mobileViewDay === i ? 'active' : ''} ${todayIndex === i ? 'is-today' : ''}`}
-            onClick={() => setMobileViewDay(i)}
+            aria-selected={activeMobileViewDay === i}
+            className={`mobile-day-tab ${activeMobileViewDay === i ? 'active' : ''} ${todayIndex === i ? 'is-today' : ''}`}
+            onClick={() => setMobileView({ weekStartTime, day: i })}
           >
             <span className="mobile-day-abbr">{DAY_ABBR[i]}</span>
             <span className="mobile-day-date">{weekDates[i].getDate()}</span>
@@ -416,7 +433,7 @@ export default function ScheduleGrid({
         {Array.from({ length: displayDays }, (_, i) => i).map(dayIndex => (
           <div
             key={DAYS[dayIndex]}
-            className={`day-column ${todayIndex === dayIndex ? 'today' : ''} ${dayIndex === mobileViewDay ? 'mobile-active' : ''}`}
+            className={`day-column ${todayIndex === dayIndex ? 'today' : ''} ${dayIndex === activeMobileViewDay ? 'mobile-active' : ''}`}
           >
             <div className="day-header">
               <span className="day-name">{DAYS[dayIndex].slice(0, 3)}</span>

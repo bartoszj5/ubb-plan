@@ -147,6 +147,26 @@ function SchedulePage() {
     loadSchedule();
   }, [loadSchedule]);
 
+  const handlePrevWeek = useCallback(() => {
+    setWeekStart((prev) => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() - 7);
+      return newDate;
+    });
+  }, []);
+
+  const handleNextWeek = useCallback(() => {
+    setWeekStart((prev) => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + 7);
+      return newDate;
+    });
+  }, []);
+
+  const handleGoToToday = useCallback(() => {
+    setWeekStart(getWeekStart(new Date()));
+  }, []);
+
   // Keyboard shortcuts for week navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -167,27 +187,7 @@ function SchedulePage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const handlePrevWeek = useCallback(() => {
-    setWeekStart((prev) => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() - 7);
-      return newDate;
-    });
-  }, []);
-
-  const handleNextWeek = useCallback(() => {
-    setWeekStart((prev) => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + 7);
-      return newDate;
-    });
-  }, []);
-
-  const handleGoToToday = useCallback(() => {
-    setWeekStart(getWeekStart(new Date()));
-  }, []);
+  }, [handleGoToToday, handleNextWeek, handlePrevWeek]);
 
   const handleToggleFavorite = useCallback(() => {
     if (!id || !scheduleType) return;
@@ -249,14 +249,12 @@ function App() {
     // Default to dark unless user explicitly prefers light
     return !window.matchMedia("(prefers-color-scheme: light)").matches;
   });
-  const [favorites, setFavorites] = useState<FavoriteGroup[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteGroup[]>(() => getFavorites());
   const navigate = useNavigate();
   const location = useLocation();
 
   // Migrate from old localStorage-based navigation & restore last schedule
   useEffect(() => {
-    setFavorites(getFavorites());
-
     if (location.pathname === "/") {
       try {
         // Migrate old format
@@ -286,7 +284,7 @@ function App() {
         /* ignore */
       }
     }
-  }, []);
+  }, [location.pathname, navigate]);
 
   // Listen for favorites changes from SchedulePage
   useEffect(() => {
