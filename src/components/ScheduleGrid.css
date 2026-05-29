@@ -451,6 +451,25 @@
   color: var(--text-primary);
 }
 
+.event-room-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+
+.event-room-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.event-room-link:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 .event-room svg {
   opacity: 0.6;
   flex-shrink: 0;

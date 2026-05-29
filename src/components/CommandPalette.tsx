@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SearchIcon, CalendarIcon, UserIcon, XIcon } from './Icons';
+import { SearchIcon, CalendarIcon, UserIcon, XIcon, MapPinIcon } from './Icons';
 import { fetchTreeIndex, searchPlans } from '../utils/api';
 import { saveGroupMeta } from '../utils/groupMeta';
 import './CommandPalette.css';
@@ -49,10 +49,11 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       try {
         const term = query.toLowerCase();
 
-        // Search tree index (groups) and UBB search API (teachers) in parallel
-        const [treeIndex, teacherResults] = await Promise.all([
+        // Search tree index (groups) and UBB search API (teachers/rooms) in parallel
+        const [treeIndex, teacherResults, roomResults] = await Promise.all([
           fetchTreeIndex() as Promise<SearchResult[]>,
           searchPlans(query, 'teacher').catch(() => []),
+          searchPlans(query, 'room').catch(() => []),
         ]);
 
         const filtered = treeIndex
@@ -82,9 +83,21 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
           resultType: 'teacher' as const,
         }));
 
-        // Combine: teachers first if query looks like a name, otherwise groups first
-        const combined = [...teachers, ...filtered].slice(0, 20);
-        setResults(combined);
+        const rooms: SearchResult[] = roomResults.map(room => ({
+          id: room.id,
+          name: room.name,
+          type: 'schedule' as const,
+          scheduleType: room.scheduleType,
+          hasChildren: false,
+          path: ['Sale'],
+          resultType: 'room' as const,
+        }));
+
+        const roomLikeQuery = /^[a-z]\s*\d/i.test(query) || /\d/.test(query);
+        const combined = roomLikeQuery
+          ? [...rooms, ...teachers, ...filtered]
+          : [...teachers, ...filtered, ...rooms];
+        setResults(combined.slice(0, 20));
         setSelectedIndex(0);
       } catch {
         /* ignore */
@@ -146,7 +159,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
             ref={inputRef}
             type="text"
             className="cmd-input"
-            placeholder="Szukaj grupy, nauczyciela, kierunku..."
+            placeholder="Szukaj grupy, nauczyciela, sali..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -174,6 +187,8 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                 >
                   {result.resultType === 'teacher' ? (
                     <UserIcon size={14} className="cmd-result-icon" />
+                  ) : result.resultType === 'room' ? (
+                    <MapPinIcon size={14} className="cmd-result-icon" />
                   ) : (
                     <CalendarIcon size={14} className="cmd-result-icon" />
                   )}
@@ -182,7 +197,9 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                     <span className="cmd-result-path">
                       {result.resultType === 'teacher'
                         ? 'Nauczyciel'
-                        : result.path.slice(0, -1).join(' \u203A ')}
+                        : result.resultType === 'room'
+                          ? 'Sala'
+                          : result.path.slice(0, -1).join(' \u203A ')}
                     </span>
                   </div>
                   <kbd className="cmd-result-hint">{'\u23CE'}</kbd>

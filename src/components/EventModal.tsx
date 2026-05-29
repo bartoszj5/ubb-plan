@@ -1,13 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { ScheduleEvent } from '../types';
-import { XIcon, ClockIcon, UserIcon, MapPinIcon, InfoIcon, WifiIcon } from './Icons';
+import { XIcon, ClockIcon, UserIcon, MapPinIcon, InfoIcon, WifiIcon, CalendarIcon } from './Icons';
 import { saveGroupMeta } from '../utils/groupMeta';
+import { searchPlans } from '../utils/api';
 import './EventModal.css';
 
 interface EventModalProps {
   event: ScheduleEvent;
+  scheduleType?: string;
   onClose: () => void;
 }
 
@@ -37,9 +39,10 @@ function getTypeColor(type: string): string {
   return '#6366F1';
 }
 
-export default function EventModal({ event, onClose }: EventModalProps) {
+export default function EventModal({ event, scheduleType, onClose }: EventModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [openingPlan, setOpeningPlan] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,6 +85,54 @@ export default function EventModal({ event, onClose }: EventModalProps) {
     `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   const typeColor = getTypeColor(event.type);
   const isRemote = !event.room && ((event.description || '').toLowerCase().includes('zdaln') || (event.location || '').toLowerCase().includes('zdaln'));
+  const canOpenRoomPlan = scheduleType !== '20';
+  const isRoomSchedule = scheduleType === '20';
+  const isTeacherSchedule = scheduleType === '10';
+
+  const openPlanFromSearch = useCallback(async (
+    query: string,
+    type: 'room' | 'group',
+    pathRoot: string,
+  ) => {
+    const name = query.trim();
+    if (!name) return;
+
+    setOpeningPlan(true);
+    try {
+      const results = await searchPlans(name, type);
+      const normalizedName = name.toLowerCase();
+      const plan = results.find(result => result.name.toLowerCase() === normalizedName) ?? results[0];
+
+      if (!plan) return;
+
+      saveGroupMeta(plan.id, {
+        name: plan.name,
+        path: [pathRoot, plan.name],
+        type: plan.scheduleType,
+      });
+      navigate(`/plan/${plan.scheduleType}/${plan.id}`);
+      onClose();
+    } catch (err) {
+      console.error(`Failed to open ${type} plan:`, err);
+    } finally {
+      setOpeningPlan(false);
+    }
+  }, [navigate, onClose]);
+
+  const handleOpenRoomPlan = useCallback(async () => {
+    if (!event.room) return;
+    await openPlanFromSearch(event.room, 'room', 'Sale');
+  }, [event.room, openPlanFromSearch]);
+
+  const handleOpenGroupPlan = useCallback(async () => {
+    if (!event.room) return;
+    await openPlanFromSearch(event.room, 'group', 'Grupy');
+  }, [event.room, openPlanFromSearch]);
+
+  const handleOpenTeacherScheduleGroupPlan = useCallback(async () => {
+    if (!event.teacher) return;
+    await openPlanFromSearch(event.teacher, 'group', 'Grupy');
+  }, [event.teacher, openPlanFromSearch]);
 
   return createPortal(
     <div className="event-modal-overlay" ref={overlayRef} onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label={event.subject}>
@@ -119,10 +170,18 @@ export default function EventModal({ event, onClose }: EventModalProps) {
           </div>
           {event.teacher && (
             <div className="event-modal-row">
-              <UserIcon size={16} />
+              {isTeacherSchedule ? <CalendarIcon size={16} /> : <UserIcon size={16} />}
               <div>
-                <div className="event-modal-label">Prowadzący</div>
-                {event.teacherId ? (
+                <div className="event-modal-label">{isTeacherSchedule ? 'Grupa' : 'Prowadzący'}</div>
+                {isTeacherSchedule ? (
+                  <button
+                    className="event-modal-value event-modal-plan-link"
+                    onClick={handleOpenTeacherScheduleGroupPlan}
+                    disabled={openingPlan}
+                  >
+                    {event.teacher}
+                  </button>
+                ) : event.teacherId ? (
                   <button
                     className="event-modal-value event-modal-teacher-link"
                     onClick={() => {
@@ -146,10 +205,28 @@ export default function EventModal({ event, onClose }: EventModalProps) {
           )}
           {event.room ? (
             <div className="event-modal-row">
-              <MapPinIcon size={16} />
+              {isRoomSchedule ? <CalendarIcon size={16} /> : <MapPinIcon size={16} />}
               <div>
-                <div className="event-modal-label">Sala</div>
-                <div className="event-modal-value mono">{event.room}</div>
+                <div className="event-modal-label">{isRoomSchedule ? 'Grupa' : 'Sala'}</div>
+                {canOpenRoomPlan ? (
+                  <button
+                    className="event-modal-value mono event-modal-plan-link"
+                    onClick={handleOpenRoomPlan}
+                    disabled={openingPlan}
+                  >
+                    {event.room}
+                  </button>
+                ) : isRoomSchedule ? (
+                  <button
+                    className="event-modal-value mono event-modal-plan-link"
+                    onClick={handleOpenGroupPlan}
+                    disabled={openingPlan}
+                  >
+                    {event.room}
+                  </button>
+                ) : (
+                  <div className="event-modal-value mono">{event.room}</div>
+                )}
               </div>
             </div>
           ) : isRemote ? (

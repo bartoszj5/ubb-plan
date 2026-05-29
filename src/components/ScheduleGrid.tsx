@@ -1,11 +1,15 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ScheduleEvent } from '../types';
-import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon } from './Icons';
+import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon, CalendarIcon } from './Icons';
 import EventModal from './EventModal';
+import { searchPlans } from '../utils/api';
+import { saveGroupMeta } from '../utils/groupMeta';
 import './ScheduleGrid.css';
 
 interface ScheduleGridProps {
   events: ScheduleEvent[];
+  scheduleType?: string;
   weekStart: Date;
   groupName: string;
   groupPath?: string[];
@@ -74,6 +78,7 @@ function isSameDay(a: Date, b: Date): boolean {
 
 export default function ScheduleGrid({
   events,
+  scheduleType,
   weekStart,
   groupName,
   groupPath,
@@ -85,8 +90,10 @@ export default function ScheduleGrid({
 }: ScheduleGridProps) {
   const [showWeekend, setShowWeekend] = useState(false);
   const [modalEvent, setModalEvent] = useState<ScheduleEvent | null>(null);
+  const [openingPlan, setOpeningPlan] = useState<string | null>(null);
   const [timeIndicatorPos, setTimeIndicatorPos] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const today = useMemo(() => new Date(), []);
 
@@ -353,6 +360,45 @@ export default function ScheduleGrid({
   const breadcrumb = groupPath && groupPath.length > 1
     ? groupPath.slice(0, -1).join(' \u203A ')
     : null;
+  const canOpenRoomPlan = scheduleType !== '20';
+  const isRoomSchedule = scheduleType === '20';
+
+  const openPlanFromSearch = useCallback(async (
+    query: string,
+    type: 'room' | 'group',
+    pathRoot: string,
+  ) => {
+    const name = query.trim();
+    if (!name) return;
+
+    setOpeningPlan(name);
+    try {
+      const results = await searchPlans(name, type);
+      const normalizedName = name.toLowerCase();
+      const plan = results.find(result => result.name.toLowerCase() === normalizedName) ?? results[0];
+
+      if (!plan) return;
+
+      saveGroupMeta(plan.id, {
+        name: plan.name,
+        path: [pathRoot, plan.name],
+        type: plan.scheduleType,
+      });
+      navigate(`/plan/${plan.scheduleType}/${plan.id}`);
+    } catch (err) {
+      console.error(`Failed to open ${type} plan:`, err);
+    } finally {
+      setOpeningPlan(null);
+    }
+  }, [navigate]);
+
+  const openRoomPlan = useCallback(async (room: string) => {
+    await openPlanFromSearch(room, 'room', 'Sale');
+  }, [openPlanFromSearch]);
+
+  const openGroupPlan = useCallback(async (group: string) => {
+    await openPlanFromSearch(group, 'group', 'Grupy');
+  }, [openPlanFromSearch]);
 
   // Check if event description mentions remote learning
   const isRemote = (event: ScheduleEvent) => {
@@ -467,7 +513,35 @@ export default function ScheduleGrid({
                       <ClockIcon size={10} />
                       {formatEventTime(event)}
                     </span>
-                    {event.room ? (
+                    {event.room && canOpenRoomPlan ? (
+                      <button
+                        type="button"
+                        className="event-room event-room-link"
+                        disabled={openingPlan === event.room}
+                        aria-label={`Pokaż plan sali ${event.room}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openRoomPlan(event.room);
+                        }}
+                      >
+                        <MapPinIcon size={10} />
+                        {event.room}
+                      </button>
+                    ) : event.room && isRoomSchedule ? (
+                      <button
+                        type="button"
+                        className="event-room event-room-link"
+                        disabled={openingPlan === event.room}
+                        aria-label={`Pokaż plan grupy ${event.room}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openGroupPlan(event.room);
+                        }}
+                      >
+                        <CalendarIcon size={10} />
+                        {event.room}
+                      </button>
+                    ) : event.room ? (
                       <span className="event-room">
                         <MapPinIcon size={10} />
                         {event.room}
@@ -487,7 +561,11 @@ export default function ScheduleGrid({
       </div>
 
       {modalEvent && (
-        <EventModal event={modalEvent} onClose={() => setModalEvent(null)} />
+        <EventModal
+          event={modalEvent}
+          scheduleType={scheduleType}
+          onClose={() => setModalEvent(null)}
+        />
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { TreeNode } from '../types';
-import { fetchFaculties, fetchTreeBranch, fetchTreeIndex } from '../utils/api';
-import { BuildingIcon, FolderIcon, CalendarIcon, ChevronRightIcon, LoaderIcon, SearchIcon, XIcon } from './Icons';
+import { fetchFaculties, fetchTreeBranch, fetchTreeIndex, searchPlans } from '../utils/api';
+import { BuildingIcon, FolderIcon, CalendarIcon, ChevronRightIcon, LoaderIcon, SearchIcon, XIcon, MapPinIcon } from './Icons';
 import './TreeView.css';
 
 interface TreeViewProps {
@@ -21,6 +21,7 @@ interface SearchResult {
   scheduleType: string | null;
   hasChildren: boolean;
   path: string[];
+  resultType?: 'group' | 'room';
 }
 
 function HighlightMatch({ text, search }: { text: string; search: string }) {
@@ -58,9 +59,12 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
     setSearchLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const treeIndex: SearchResult[] = await fetchTreeIndex();
+        const [treeIndex, roomResults] = await Promise.all([
+          fetchTreeIndex() as Promise<SearchResult[]>,
+          searchPlans(searchTerm, 'room').catch(() => []),
+        ]);
         const term = searchTerm.toLowerCase();
-        const results = treeIndex
+        const groups = treeIndex
           .filter(node => {
             if (node.name.toLowerCase().includes(term)) return true;
             // Match path excluding top-level faculty name to avoid false positives
@@ -75,8 +79,19 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
             if (aName !== bName) return aName - bName;
             return a.name.localeCompare(b.name, 'pl');
           })
-          .slice(0, 50);
-        setSearchResults(results);
+          .slice(0, 40)
+          .map(node => ({ ...node, resultType: 'group' as const }));
+        const rooms: SearchResult[] = roomResults.map(room => ({
+          id: room.id,
+          name: room.name,
+          type: 'schedule' as const,
+          scheduleType: room.scheduleType,
+          hasChildren: false,
+          path: ['Sale'],
+          resultType: 'room' as const,
+        }));
+        const roomLikeQuery = /^[a-z]\s*\d/i.test(searchTerm) || /\d/.test(searchTerm);
+        setSearchResults((roomLikeQuery ? [...rooms, ...groups] : [...groups, ...rooms]).slice(0, 50));
       } catch (err) {
         console.error('Search failed:', err);
       } finally {
@@ -244,10 +259,10 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
         <SearchIcon size={14} className="tree-search-icon" />
         <input
           type="text"
-          placeholder="Szukaj grupy..."
+          placeholder="Szukaj grupy lub sali..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          aria-label="Szukaj grupy"
+          aria-label="Szukaj grupy lub sali"
         />
         {searchTerm && (
           <button
@@ -270,15 +285,15 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
             <div className="search-results">
               {searchResults.map(result => (
                 <div
-                  key={result.id}
+                  key={`${result.resultType ?? 'group'}-${result.id}`}
                   className="search-result"
                   onClick={() => handleSearchResultClick(result)}
                 >
                   <span className="search-result-path">
-                    {result.path.slice(0, -1).join(' \u203A ')}
+                    {result.resultType === 'room' ? 'Sala' : result.path.slice(0, -1).join(' \u203A ')}
                   </span>
                   <span className="search-result-name">
-                    <CalendarIcon size={14} />
+                    {result.resultType === 'room' ? <MapPinIcon size={14} /> : <CalendarIcon size={14} />}
                     <HighlightMatch text={result.name} search={searchTerm} />
                   </span>
                 </div>

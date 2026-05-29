@@ -227,6 +227,7 @@ function SchedulePage() {
   return (
     <ScheduleGrid
       events={events}
+      scheduleType={scheduleType}
       weekStart={weekStart}
       groupName={groupName}
       groupPath={groupPath}
