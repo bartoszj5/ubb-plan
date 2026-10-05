@@ -127,13 +127,18 @@ export default function ScheduleGrid({
     };
   });
 
-  const displayWeekend = showWeekend || hasWeekendEvents;
+  const displayWeekend = showWeekend || hasWeekendEvents || todayIndex >= 5;
   const displayDays = displayWeekend ? 7 : 5;
   const defaultMobileViewDay = todayIndex >= 0 ? todayIndex : 0;
   const selectedMobileViewDay = mobileView.weekStartTime === weekStartTime
     ? mobileView.day
     : defaultMobileViewDay;
   const activeMobileViewDay = Math.min(selectedMobileViewDay, displayDays - 1);
+
+  const handleGoToToday = () => {
+    setMobileView({ weekStartTime, day: getDayIndex(new Date()) });
+    onGoToToday();
+  };
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -439,7 +444,7 @@ export default function ScheduleGrid({
             <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzień">
               <ChevronLeftIcon size={16} />
             </button>
-            <button onClick={onGoToToday} className="today-btn">
+            <button onClick={handleGoToToday} className="today-btn">
               Dziś
             </button>
             <span className="week-label">{formatWeekRange(weekStart, displayWeekend)}</span>

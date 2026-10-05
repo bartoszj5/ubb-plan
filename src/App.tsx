@@ -164,7 +164,8 @@ function SchedulePage() {
   }, []);
 
   const handleGoToToday = useCallback(() => {
-    setWeekStart(getWeekStart(new Date()));
+    const currentWeekStart = getWeekStart(new Date());
+    setWeekStart(prev => prev.getTime() === currentWeekStart.getTime() ? prev : currentWeekStart);
   }, []);
 
   // Keyboard shortcuts for week navigation
