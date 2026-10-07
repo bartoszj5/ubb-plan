@@ -1,4 +1,4 @@
-import { fetchFromUBB, parseICS, parseScheduleHTMLMeta, fetchTeacherFullNames } from '../../_lib/parsers.js';
+import { fetchFromUBB, parseICS, parseScheduleHTMLMeta, fetchTeacherFullNames, attachScheduleNotices } from '../../_lib/parsers.js';
 
 export default async function handler(request, response) {
   try {
@@ -22,8 +22,8 @@ export default async function handler(request, response) {
       htmlRes.text(),
     ]);
 
-    const events = parseICS(icsData);
-    const { subjects, teachers } = parseScheduleHTMLMeta(html);
+    const { subjects, teachers, entries } = parseScheduleHTMLMeta(html, type);
+    const events = attachScheduleNotices(parseICS(icsData, entries));
 
     // Fetch teacher full names in parallel
     const teacherFullNames = await fetchTeacherFullNames(teachers);

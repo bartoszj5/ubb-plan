@@ -20,6 +20,9 @@
   --accent-alpha: rgba(99, 102, 241, 0.12);
   --accent-light: rgba(99, 102, 241, 0.06);
   --accent-gold: #FBBF24;
+  --notice-color: #FBBF24;
+  --notice-bg: rgba(251, 191, 36, 0.10);
+  --notice-border: rgba(251, 191, 36, 0.28);
   --header-bg: rgba(15, 15, 19, 0.97);
   --header-border: rgba(255, 255, 255, 0.06);
   --header-text: #F1F1F4;
@@ -71,6 +74,9 @@
   --accent-alpha: rgba(79, 70, 229, 0.10);
   --accent-light: rgba(79, 70, 229, 0.05);
   --accent-gold: #D97706;
+  --notice-color: #92400E;
+  --notice-bg: #FFFBEB;
+  --notice-border: #FCD34D;
   --header-bg: rgba(255, 255, 255, 0.97);
   --header-border: rgba(0, 0, 0, 0.06);
   --header-text: #1A1A2E;

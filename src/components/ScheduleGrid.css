@@ -491,6 +491,42 @@
 }
 
 /* Compact events (short duration) */
+.event-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.event-notice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 5px;
+  border: 1px solid var(--notice-border);
+  border-radius: 5px;
+  background: var(--notice-bg);
+  color: var(--notice-color);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.event-notice-badge svg {
+  flex-shrink: 0;
+}
+
+.event-block.event-standalone-notice {
+  border-left-color: var(--notice-color);
+  background: var(--notice-bg);
+  border-top-color: var(--notice-border);
+  border-right-color: var(--notice-border);
+  border-bottom-color: var(--notice-border);
+}
+
 .event-block.event-compact {
   padding: 3px 6px 3px 10px;
   gap: 0;

@@ -7,6 +7,7 @@ import {
     parseGroupTitle,
     parseScheduleHTMLMeta,
     parseICS,
+    attachScheduleNotices,
     parseNotices,
     fetchTeacherFullNames,
 } from '../api/_lib/parsers.js';
@@ -219,8 +220,8 @@ app.get('/api/schedule/:type/:id', async (req, res) => {
             htmlRes.text(),
         ]);
 
-        const events = parseICS(icsData);
-        const { subjects, teachers } = parseScheduleHTMLMeta(html);
+        const { subjects, teachers, entries } = parseScheduleHTMLMeta(html, type);
+        const events = attachScheduleNotices(parseICS(icsData, entries));
 
         const teacherFullNames = await fetchTeacherFullNames(teachers);
 

@@ -26,7 +26,7 @@
   overflow-y: auto;
   animation: modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 @keyframes modalSlideIn {
@@ -155,6 +155,68 @@
 .event-modal-desc {
   white-space: pre-wrap;
   font-weight: 400;
+}
+
+.event-modal-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-modal-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--notice-border);
+  border-radius: var(--radius-md);
+  background: var(--notice-bg);
+  color: var(--notice-color);
+}
+
+.event-modal-notice > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.event-modal-notice > div {
+  min-width: 0;
+}
+
+.event-modal-notice-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.event-modal-notice p {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.event-modal-notice-room {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.event-modal-notice-room button {
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.event-modal-notice-teacher {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 /* Clickable teacher link */

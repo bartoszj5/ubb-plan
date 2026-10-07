@@ -117,9 +117,27 @@ export function parseGroupTitle(html, type) {
   return { name, path };
 }
 
-export function parseScheduleHTMLMeta(html) {
+export function parseScheduleHTMLMeta(html, scheduleType = '0') {
   const subjects = {};
   const teachers = {};
+  const entries = [];
+
+  // UBB also renders notices as courses, but without a lesson type.
+  const courseRegex = /<div\b[^>]*\bid="course_\d+"[^>]*>([\s\S]*?)<\/div>/g;
+  let course;
+  while ((course = courseRegex.exec(html)) !== null) {
+    const content = course[1].replace(/<img\b[^>]*>/gi, '');
+    const heading = decodeHTMLText(content.split(/<br\s*\/?\s*>/i)[0]);
+    const typedHeading = heading.match(/^(.*),\s*(wyk|ćw|cw|lab|sem|lek|proj|konw|wykład|ćwiczenia|laboratorium|seminarium|lektorat|projekt|konwersatorium)\.?$/iu);
+    const links = [...content.matchAll(/<a[^>]*href="plan\.php\?type=(\d+)&(?:amp;)?id=\d+"[^>]*>([^<]+)<\/a>/g)];
+    entries.push({
+      subject: typedHeading ? typedHeading[1].trim() : heading,
+      type: typedHeading ? typedHeading[2].trim() : '',
+      teacher: links.filter(link => link[1] === (String(scheduleType) === '10' ? '0' : '10')).map(link => decodeHTMLText(link[2])).join(' '),
+      room: links.filter(link => link[1] === (String(scheduleType) === '20' ? '0' : '20')).map(link => decodeHTMLText(link[2])).join(' '),
+      isNotice: !typedHeading,
+    });
+  }
 
   // Parse legend: <strong>Am</strong> - Analiza macierzowa, występowanie: ...
   const subjectRegex = /<strong>([^<]+)<\/strong>\s*-\s*([^,<]+)/g;
@@ -141,7 +159,39 @@ export function parseScheduleHTMLMeta(html) {
     }
   }
 
-  return { subjects, teachers };
+  return { subjects, teachers, entries };
+}
+
+function decodeHTMLText(text) {
+  return text.replace(/<[^>]*>/g, '').replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi, (entity, decimal, hex, name) => {
+    if (decimal || hex) {
+      const code = parseInt(decimal || hex, hex ? 16 : 10);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+    }
+    return { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' }[name.toLowerCase()] ?? entity;
+  }).trim();
+}
+
+// Only merge a notice when its time and teacher identify one lesson.
+// Ambiguous or standalone notices remain visible as separate entries.
+export function attachScheduleNotices(events) {
+  const lessons = events.filter(event => event.kind !== 'notice');
+  const attached = new Set();
+
+  for (const notice of events.filter(event => event.kind === 'notice')) {
+    const candidates = lessons.filter(event =>
+      new Date(event.start) < new Date(notice.end) &&
+      new Date(notice.start) < new Date(event.end) &&
+      notice.teacher && notice.teacher.split(/\s+/).some(teacher => event.teacher.split(/\s+/).includes(teacher))
+    );
+    if (candidates.length !== 1) continue;
+    const lesson = candidates[0];
+    lesson.notices ??= [];
+    lesson.notices.push({ text: notice.subject, teacher: notice.teacher, room: notice.room });
+    attached.add(notice);
+  }
+
+  return events.filter(event => !attached.has(event));
 }
 
 const teacherNameCache = new Map();
@@ -224,9 +274,14 @@ export function parseNotices(html) {
   return notices;
 }
 
-export function parseICS(icsData) {
+export function parseICS(icsData, entries = []) {
   const events = [];
-  const eventBlocks = icsData.split("BEGIN:VEVENT").slice(1);
+  const eventBlocks = icsData.replace(/\r?\n[ \t]/g, '').split("BEGIN:VEVENT").slice(1);
+  const normalize = text => text.trim().replace(/\s+/g, ' ');
+  const entriesBySummary = new Map(entries.map(entry => [
+    normalize(`${entry.subject} ${entry.type} ${entry.teacher} ${entry.room}`), entry,
+  ]));
+  const decodeICSText = text => text.trim().replace(/\\([nN,;\\])/g, (_, char) => /n/i.test(char) ? '\n' : char);
 
   for (const block of eventBlocks) {
     const event = {};
@@ -244,11 +299,18 @@ export function parseICS(icsData) {
       event.end = parseICSDate(dtend[1]);
     }
     if (summary) {
-      const summaryText = summary[1].trim();
+      const summaryText = decodeICSText(summary[1]);
       event.summary = summaryText;
 
-      const parts = summaryText.split(" ");
-      if (parts.length >= 1) {
+      const entry = entriesBySummary.get(normalize(summaryText));
+      const parts = summaryText.split(/\s+/);
+      if (entry) {
+        event.subject = entry.subject;
+        event.type = entry.type;
+        event.teacher = entry.teacher;
+        event.room = entry.room;
+        if (entry.isNotice) event.kind = 'notice';
+      } else if (parts.length >= 1) {
         event.subject = parts[0];
         event.type = parts[1] || "";
         event.teacher = parts[2] || "";
@@ -256,10 +318,10 @@ export function parseICS(icsData) {
       }
     }
     if (location) {
-      event.location = location[1].trim();
+      event.location = decodeICSText(location[1]);
     }
     if (description) {
-      event.description = description[1].trim();
+      event.description = decodeICSText(description[1]);
     }
 
     if (event.start) {

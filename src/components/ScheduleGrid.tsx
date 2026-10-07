@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ScheduleEvent } from '../types';
-import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon, CalendarIcon } from './Icons';
+import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon, CalendarIcon, InfoIcon } from './Icons';
 import EventModal from './EventModal';
 import { searchPlans } from '../utils/api';
 import { saveGroupMeta } from '../utils/groupMeta';
+import { getEventNotices, getNoticeLabel, formatNotice } from '../utils/scheduleNotices';
 import './ScheduleGrid.css';
 
 interface ScheduleGridProps {
@@ -105,6 +106,12 @@ export default function ScheduleGrid({
     });
   }, [weekStart]);
 
+  // The UBB calendar export contains the entire semester, even with ?w=.
+  const weekEvents = useMemo(() => events.filter(event => {
+    const date = new Date(event.start);
+    return weekDates.some(day => isSameDay(date, day));
+  }), [events, weekDates]);
+
   const todayIndex = useMemo(() => {
     return weekDates.findIndex(d => isSameDay(d, today));
   }, [weekDates, today]);
@@ -183,7 +190,7 @@ export default function ScheduleGrid({
     let earliest = MAX_END_HOUR;
     let latest = MIN_START_HOUR;
 
-    events.forEach(event => {
+    weekEvents.forEach(event => {
       const s = new Date(event.start);
       const e = new Date(event.end);
       const sh = s.getHours() + s.getMinutes() / 60;
@@ -211,7 +218,7 @@ export default function ScheduleGrid({
       totalHours: total,
       hours: Array.from({ length: total }, (_, i) => i + s),
     };
-  }, [events]);
+  }, [weekEvents]);
 
   // Current time indicator
   useEffect(() => {
@@ -259,7 +266,7 @@ export default function ScheduleGrid({
     const map: Map<number, (ScheduleEvent & { style: React.CSSProperties; durationHours: number })[]> = new Map();
 
     const rawEventsByDay: Map<number, ScheduleEvent[]> = new Map();
-    events.forEach(event => {
+    weekEvents.forEach(event => {
       const eventDate = new Date(event.start);
       const dayIndex = getDayIndex(eventDate);
 
@@ -352,7 +359,7 @@ export default function ScheduleGrid({
     });
 
     return map;
-  }, [events, startHour, totalHours]);
+  }, [weekEvents, startHour, totalHours]);
 
   const formatEventTime = (event: ScheduleEvent) => {
     const start = new Date(event.start);
@@ -500,19 +507,32 @@ export default function ScheduleGrid({
                   <div className="time-indicator-line" />
                 </div>
               )}
-              {eventsByDay.get(dayIndex)?.map((event, i) => (
+              {eventsByDay.get(dayIndex)?.map((event, i) => {
+                const notices = getEventNotices(event);
+                const noticeLabel = getNoticeLabel(notices);
+                return (
                 <div
                   key={i}
-                  className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''} ${isEventNow(event) ? 'event-now' : ''}`}
+                  className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''} ${isEventNow(event) ? 'event-now' : ''} ${notices.length > 0 ? 'event-with-notice' : ''} ${event.kind === 'notice' ? 'event-standalone-notice' : ''}`}
                   style={event.style}
-                  title={`${event.subjectFullName || event.subject} (${event.type})\n${event.teacherFullName || event.teacher}\n${event.room || 'zdalnie'}\n${formatEventTime(event)}`}
+                  title={`${event.subjectFullName || event.subject}${event.type ? ` (${event.type})` : ''}\n${event.teacherFullName || event.teacher}\n${event.room || ''}\n${formatEventTime(event)}${notices.length > 0 ? `\n\n${notices.map(formatNotice).join('\n\n')}` : ''}`}
                   onClick={() => setModalEvent(event)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalEvent(event); } }}
                 >
                   <span className="event-subject">{event.subjectFullName || event.subject}</span>
-                  <span className="event-type">{event.type}</span>
+                  {(event.type || notices.length > 0) && (
+                    <div className="event-badges">
+                      {event.type && <span className="event-type">{event.type}</span>}
+                      {notices.length > 0 && (
+                        <span className="event-notice-badge" aria-label={`${noticeLabel}. ${notices.map(formatNotice).join('. ')}`}>
+                          <InfoIcon size={12} />
+                          <span>{noticeLabel}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="event-meta">
                     <span className="event-time">
                       <ClockIcon size={10} />
@@ -551,7 +571,7 @@ export default function ScheduleGrid({
                         <MapPinIcon size={10} />
                         {event.room}
                       </span>
-                    ) : isRemote(event) ? (
+                    ) : event.kind !== 'notice' && isRemote(event) ? (
                       <span className="event-note">
                         <WifiIcon size={10} />
                         zdalnie
@@ -559,7 +579,8 @@ export default function ScheduleGrid({
                     ) : null}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

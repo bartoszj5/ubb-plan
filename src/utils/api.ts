@@ -102,7 +102,7 @@ export async function fetchNotices(): Promise<Notice[]> {
 }
 
 export async function fetchSchedule(type: string, id: string, week?: number) {
-  const CACHE_KEY = `ubb-schedule:${type}:${id}:${week || 'current'}`;
+  const CACHE_KEY = `ubb-schedule:v2:${type}:${id}:${week || 'current'}`;
   const cached = getSessionCache(CACHE_KEY);
   if (cached) return cached;
 

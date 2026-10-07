@@ -9,6 +9,8 @@ export interface TreeNode {
 }
 
 export interface ScheduleEvent {
+  kind?: 'notice';
+  notices?: ScheduleNotice[];
   start: string;
   end: string;
   summary: string;
@@ -21,6 +23,12 @@ export interface ScheduleEvent {
   subjectFullName?: string;
   teacherFullName?: string;
   teacherId?: string;
+}
+
+export interface ScheduleNotice {
+  text: string;
+  teacher?: string;
+  room?: string;
 }
 
 export interface FavoriteGroup {

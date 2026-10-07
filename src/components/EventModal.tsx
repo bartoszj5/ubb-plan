@@ -5,6 +5,7 @@ import type { ScheduleEvent } from '../types';
 import { XIcon, ClockIcon, UserIcon, MapPinIcon, InfoIcon, WifiIcon, CalendarIcon } from './Icons';
 import { saveGroupMeta } from '../utils/groupMeta';
 import { searchPlans } from '../utils/api';
+import { getEventNotices, getNoticeLabel } from '../utils/scheduleNotices';
 import './EventModal.css';
 
 interface EventModalProps {
@@ -84,6 +85,7 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
   const fmt = (d: Date) =>
     `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   const typeColor = getTypeColor(event.type);
+  const notices = getEventNotices(event);
   const isRemote = !event.room && ((event.description || '').toLowerCase().includes('zdaln') || (event.location || '').toLowerCase().includes('zdaln'));
   const canOpenRoomPlan = scheduleType !== '20';
   const isRoomSchedule = scheduleType === '20';
@@ -161,6 +163,32 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
           </button>
         </div>
         <div className="event-modal-body">
+          {notices.length > 0 && (
+            <div className="event-modal-notices">
+              {notices.map((notice, index) => (
+                <div className="event-modal-notice" key={index}>
+                  <InfoIcon size={18} />
+                  <div>
+                    <div className="event-modal-notice-title">{getNoticeLabel([notice])}</div>
+                    <p>{notice.text}</p>
+                    {notice.room && (
+                      <div className="event-modal-notice-room">
+                        <MapPinIcon size={14} />
+                        <span>{isRoomSchedule ? 'Grupa:' : getNoticeLabel([notice]) === 'Zmiana sali' ? 'Nowa sala:' : 'Sala:'}</span>
+                        {canOpenRoomPlan ? (
+                          <button className="event-modal-plan-link" disabled={openingPlan}
+                            onClick={() => openPlanFromSearch(notice.room!, 'room', 'Sale')}>
+                            {notice.room}
+                          </button>
+                        ) : <strong>{notice.room}</strong>}
+                      </div>
+                    )}
+                    {notice.teacher && <div className="event-modal-notice-teacher">{isTeacherSchedule ? 'Grupa:' : 'Dotyczy:'} {notice.teacher}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="event-modal-row">
             <ClockIcon size={16} />
             <div>
