@@ -1,3 +1,4 @@
+import { sendUBBError } from './_lib/ubb.js';
 import { fetchFromUBB, parseFaculties } from './_lib/parsers.js';
 
 let cachedFaculties = null;
@@ -18,6 +19,6 @@ export default async function handler(request, response) {
     response.status(200).json(cachedFaculties);
   } catch (error) {
     console.error('Error fetching faculties:', error);
-    response.status(500).json({ error: 'Failed to fetch faculties' });
+    sendUBBError(response, error, 'Failed to fetch faculties');
   }
 }

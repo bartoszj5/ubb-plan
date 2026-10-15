@@ -1,3 +1,4 @@
+import { sendUBBError } from '../api/_lib/ubb.js';
 import express from 'express';
 import cors from 'cors';
 import {
@@ -14,9 +15,8 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const UBB_BASE_URL = 'https://plany.ubb.edu.pl';
 
-app.use(cors());
+app.use(cors({ exposedHeaders: ['X-UBB-Fetched-At'] }));
 app.use(express.json());
 
 // ── Caches ──────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ app.get('/api/faculties', async (req, res) => {
         res.json(facultiesCache);
     } catch (error) {
         console.error('Error fetching faculties:', error);
-        res.status(500).json({ error: 'Failed to fetch faculties' });
+        sendUBBError(res, error, 'Failed to fetch faculties');
     }
 });
 
@@ -161,7 +161,7 @@ app.get('/api/tree', async (req, res) => {
         res.json(nodes);
     } catch (error) {
         console.error('Error fetching tree:', error);
-        res.status(500).json({ error: 'Failed to fetch tree data' });
+        sendUBBError(res, error, 'Failed to fetch tree data');
     }
 });
 
@@ -176,7 +176,7 @@ app.get('/api/tree-index', async (req, res) => {
         res.json(treeIndexCache);
     } catch (error) {
         console.error('Error building tree index:', error);
-        res.status(500).json({ error: 'Failed to build tree index' });
+        sendUBBError(res, error, 'Failed to build tree index');
     }
 });
 
@@ -193,7 +193,7 @@ app.get('/api/notices', async (req, res) => {
         res.json(noticesCache);
     } catch (error) {
         console.error('Error fetching notices:', error);
-        res.status(500).json({ error: 'Failed to fetch notices' });
+        sendUBBError(res, error, 'Failed to fetch notices');
     }
 });
 
@@ -237,10 +237,12 @@ app.get('/api/schedule/:type/:id', async (req, res) => {
             }
         }
 
+        res.setHeader('X-UBB-Fetched-At', String(Date.now()));
+        res.setHeader('Cache-Control', 'no-store');
         res.json(events);
     } catch (error) {
         console.error('Error fetching schedule:', error);
-        res.status(500).json({ error: 'Failed to fetch schedule' });
+        sendUBBError(res, error, 'Failed to fetch schedule');
     }
 });
 
@@ -260,7 +262,7 @@ app.get('/api/group-info/:type/:id', async (req, res) => {
         res.json(info);
     } catch (error) {
         console.error('Error fetching group info:', error);
-        res.status(500).json({ error: 'Failed to fetch group info' });
+        sendUBBError(res, error, 'Failed to fetch group info');
     }
 });
 
@@ -281,7 +283,7 @@ app.get('/api/schedule-html/:type/:id', async (req, res) => {
         res.send(html);
     } catch (error) {
         console.error('Error fetching schedule HTML:', error);
-        res.status(500).json({ error: 'Failed to fetch schedule HTML' });
+        sendUBBError(res, error, 'Failed to fetch schedule HTML');
     }
 });
 
@@ -309,7 +311,7 @@ app.get('/api/search', async (req, res) => {
             params.append('rooms', '1');
         }
 
-        const response = await fetch(`${UBB_BASE_URL}/right_menu_result_plan.php`, {
+        const response = await fetchFromUBB('/right_menu_result_plan.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: params.toString(),
@@ -335,7 +337,7 @@ app.get('/api/search', async (req, res) => {
         res.json(results);
     } catch (error) {
         console.error('Error searching:', error);
-        res.status(500).json({ error: 'Search failed' });
+        sendUBBError(res, error, 'Search failed');
     }
 });
 

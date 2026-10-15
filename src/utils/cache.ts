@@ -1,4 +1,4 @@
-interface CacheEntry<T> {
+export interface CacheEntry<T> {
   data: T;
   timestamp: number;
 }
@@ -23,23 +23,29 @@ export function setMemoryCache<T>(key: string, data: T): void {
 
 // --- sessionStorage cache (schedules) ---
 
-export function getSessionCache<T>(key: string): T | null {
+export function getSessionCache<T>(key: string, ttlMs: number): CacheEntry<T> | null {
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    return JSON.parse(raw) as T;
+    const entry = JSON.parse(raw) as CacheEntry<T>;
+    if (!entry || !Number.isFinite(entry.timestamp) || Date.now() - entry.timestamp >= ttlMs) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return entry;
   } catch {
     return null;
   }
 }
 
-export function setSessionCache<T>(key: string, data: T): void {
+export function setSessionCache<T>(key: string, data: T, timestamp = Date.now()): void {
+  const serialized = JSON.stringify({ data, timestamp });
   try {
-    sessionStorage.setItem(key, JSON.stringify(data));
+    sessionStorage.setItem(key, serialized);
   } catch {
-    pruneSessionCache();
     try {
-      sessionStorage.setItem(key, JSON.stringify(data));
+      pruneSessionCache();
+      sessionStorage.setItem(key, serialized);
     } catch { /* quota exceeded, silently fail */ }
   }
 }

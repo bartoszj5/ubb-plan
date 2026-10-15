@@ -53,16 +53,20 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
   useEffect(() => {
     if (searchTerm.length < 2) {
       setSearchResults([]);
+      setSearchLoading(false);
       return;
     }
 
+    const controller = new AbortController();
+    setSearchResults([]);
     setSearchLoading(true);
     const timer = setTimeout(async () => {
       try {
         const [treeIndex, roomResults] = await Promise.all([
-          fetchTreeIndex() as Promise<SearchResult[]>,
-          searchPlans(searchTerm, 'room').catch(() => []),
+          fetchTreeIndex(controller.signal) as Promise<SearchResult[]>,
+          searchPlans(searchTerm, 'room', controller.signal).catch(() => []),
         ]);
+        if (controller.signal.aborted) return;
         const term = searchTerm.toLowerCase();
         const groups = treeIndex
           .filter(node => {
@@ -93,13 +97,16 @@ export default function TreeView({ onSelectSchedule }: TreeViewProps) {
         const roomLikeQuery = /^[a-z]\s*\d/i.test(searchTerm) || /\d/.test(searchTerm);
         setSearchResults((roomLikeQuery ? [...rooms, ...groups] : [...groups, ...rooms]).slice(0, 50));
       } catch (err) {
-        console.error('Search failed:', err);
+        if (!controller.signal.aborted) console.error('Search failed:', err);
       } finally {
-        setSearchLoading(false);
+        if (!controller.signal.aborted) setSearchLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [searchTerm]);
 
   async function loadFaculties() {

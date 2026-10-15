@@ -1,3 +1,4 @@
+import { sendUBBError } from './_lib/ubb.js';
 import { fetchFromUBB } from './_lib/parsers.js';
 
 export default async function handler(req, res) {
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
       params.append('rooms', '1');
     }
 
-    const response = await fetch('https://plany.ubb.edu.pl/right_menu_result_plan.php', {
+    const response = await fetchFromUBB('/right_menu_result_plan.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
@@ -36,7 +37,7 @@ export default async function handler(req, res) {
     res.status(200).json(results);
   } catch (error) {
     console.error('Error searching:', error);
-    res.status(500).json({ error: 'Search failed' });
+    sendUBBError(res, error, 'Search failed');
   }
 }
 

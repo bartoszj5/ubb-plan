@@ -1,3 +1,4 @@
+import { sendUBBError } from '../../_lib/ubb.js';
 import { fetchFromUBB, parseGroupTitle } from '../../_lib/parsers.js';
 
 export default async function handler(request, response) {
@@ -17,6 +18,6 @@ export default async function handler(request, response) {
     response.status(200).json(info);
   } catch (error) {
     console.error('Error fetching group info:', error);
-    response.status(500).json({ error: 'Failed to fetch group info' });
+    sendUBBError(response, error, 'Failed to fetch group info');
   }
 }

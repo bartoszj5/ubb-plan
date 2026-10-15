@@ -31,3 +31,11 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Testy
+
+Wymagany Node.js 22.18 lub nowszy.
+
+```bash
+npm test
+```

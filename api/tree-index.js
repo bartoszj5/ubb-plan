@@ -1,3 +1,4 @@
+import { sendUBBError } from './_lib/ubb.js';
 import { fetchFromUBB, parseFaculties, parseTreeNodes } from './_lib/parsers.js';
 
 const MAX_DEPTH = 5;
@@ -93,6 +94,6 @@ export default async function handler(req, res) {
     res.status(200).json(cachedIndex);
   } catch (error) {
     console.error('Error building tree index:', error);
-    res.status(500).json({ error: 'Failed to build tree index' });
+    sendUBBError(res, error, 'Failed to build tree index');
   }
 }

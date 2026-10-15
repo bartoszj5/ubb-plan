@@ -1,9 +1,5 @@
-const UBB_BASE_URL = "https://plany.ubb.edu.pl";
-
-export async function fetchFromUBB(path) {
-  const response = await fetch(`${UBB_BASE_URL}${path}`);
-  return response;
-}
+import { fetchFromUBB } from './ubb.js';
+export { fetchFromUBB };
 
 export function parseFaculties(html) {
   const faculties = [];
@@ -208,8 +204,8 @@ export async function fetchTeacherFullNames(teacherMap) {
         return;
       }
       try {
-        const res = await fetch(
-          `https://plany.ubb.edu.pl/plan.php?type=10&id=${id}&winW=2000&winH=1000`,
+        const res = await fetchFromUBB(
+          `/plan.php?type=10&id=${id}&winW=2000&winH=1000`,
         );
         const html = await res.text();
         const titleMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);

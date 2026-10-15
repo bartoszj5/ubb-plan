@@ -1,3 +1,4 @@
+import { sendUBBError } from './_lib/ubb.js';
 import { fetchFromUBB, parseNotices } from './_lib/parsers.js';
 
 let cachedNotices = null;
@@ -18,6 +19,6 @@ export default async function handler(request, response) {
     response.status(200).json(cachedNotices);
   } catch (error) {
     console.error('Error fetching notices:', error);
-    response.status(500).json({ error: 'Failed to fetch notices' });
+    sendUBBError(response, error, 'Failed to fetch notices');
   }
 }

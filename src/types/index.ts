@@ -8,6 +8,11 @@ export interface TreeNode {
   isLeaf?: boolean;
 }
 
+export interface MobileScheduleView {
+  weekStartTime: number;
+  day: number;
+}
+
 export interface ScheduleEvent {
   kind?: 'notice';
   notices?: ScheduleNotice[];

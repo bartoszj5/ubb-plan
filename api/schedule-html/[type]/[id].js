@@ -1,3 +1,4 @@
+import { sendUBBError } from '../../_lib/ubb.js';
 import { fetchFromUBB } from '../../_lib/parsers.js';
 
 export default async function handler(request, response) {
@@ -15,6 +16,6 @@ export default async function handler(request, response) {
     response.status(200).send(html);
   } catch (error) {
     console.error('Error fetching schedule HTML:', error);
-    response.status(500).json({ error: 'Failed to fetch schedule HTML' });
+    sendUBBError(response, error, 'Failed to fetch schedule HTML');
   }
 }

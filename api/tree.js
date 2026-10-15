@@ -1,3 +1,4 @@
+import { sendUBBError } from './_lib/ubb.js';
 import { fetchFromUBB, parseTreeNodes } from './_lib/parsers.js';
 
 const branchCache = new Map();
@@ -32,6 +33,6 @@ export default async function handler(request, response) {
     response.status(200).json(nodes);
   } catch (error) {
     console.error('Error fetching tree:', error);
-    response.status(500).json({ error: 'Failed to fetch tree data' });
+    sendUBBError(response, error, 'Failed to fetch tree data');
   }
 }

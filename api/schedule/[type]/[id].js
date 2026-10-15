@@ -1,8 +1,9 @@
+import { sendUBBError } from '../../_lib/ubb.js';
 import { fetchFromUBB, parseICS, parseScheduleHTMLMeta, fetchTeacherFullNames, attachScheduleNotices } from '../../_lib/parsers.js';
 
 export default async function handler(request, response) {
   try {
-    const { type, id, week } = request.query;
+    const { type, id, week, refresh } = request.query;
 
     let icsUrl = `/plan.php?type=${type}&id=${id}&cvsfile=true`;
     let htmlUrl = `/plan.php?type=${type}&id=${id}&winW=2000&winH=1000`;
@@ -41,10 +42,11 @@ export default async function handler(request, response) {
       }
     }
 
-    response.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    response.setHeader('X-UBB-Fetched-At', String(Date.now()));
+    response.setHeader('Cache-Control', refresh ? 'no-store' : 'public, s-maxage=300, stale-while-revalidate=600');
     response.status(200).json(events);
   } catch (error) {
     console.error('Error fetching schedule:', error);
-    response.status(500).json({ error: 'Failed to fetch schedule' });
+    sendUBBError(response, error, 'Failed to fetch schedule');
   }
 }

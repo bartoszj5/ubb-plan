@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Routes,
   Route,
@@ -20,8 +20,9 @@ import {
   StarIcon,
   SearchIcon,
 } from "./components/Icons";
-import type { ScheduleEvent, FavoriteGroup } from "./types";
-import { fetchSchedule, fetchGroupInfo } from "./utils/api";
+import type { FavoriteGroup, MobileScheduleView } from "./types";
+import { fetchSchedule, fetchGroupInfo, SCHEDULE_CACHE_TTL } from "./utils/api";
+import type { ScheduleData } from "./utils/api";
 import {
   getFavorites,
   addFavorite,
@@ -87,8 +88,13 @@ function SchedulePage() {
     id: string;
   }>();
 
-  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [schedule, setSchedule] = useState<(ScheduleData & { key: string }) | null>(null);
+  const scheduleRequest = useRef<AbortController | null>(null);
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
+  const [mobileView, setMobileView] = useState<MobileScheduleView>(() => ({
+    weekStartTime: weekStart.getTime(),
+    day: (new Date().getDay() + 6) % 7,
+  }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [groupName, setGroupName] = useState(() => {
@@ -99,6 +105,8 @@ function SchedulePage() {
     const meta = id ? getGroupMeta(id) : null;
     return meta?.path ?? [];
   });
+  const scheduleKey = `${scheduleType}:${id}:${getUBBWeekNumber(weekStart)}`;
+  const currentSchedule = schedule?.key === scheduleKey ? schedule : null;
 
   // Save as last viewed plan
   useEffect(() => {
@@ -116,35 +124,58 @@ function SchedulePage() {
       return;
     }
 
-    fetchGroupInfo(scheduleType, id)
+    const controller = new AbortController();
+    setGroupName(id);
+    setGroupPath([]);
+    fetchGroupInfo(scheduleType, id, controller.signal)
       .then((info) => {
+        if (controller.signal.aborted) return;
         saveGroupMeta(id, { name: info.name, path: info.path, type: scheduleType });
         setGroupName(info.name);
         setGroupPath(info.path);
       })
       .catch(() => {/* ignore */});
+    return () => controller.abort();
   }, [id, scheduleType]);
 
-  const loadSchedule = useCallback(async () => {
+  const loadSchedule = useCallback(async (forceRefresh = false) => {
     if (!scheduleType || !id) return;
 
+    scheduleRequest.current?.abort();
+    const controller = new AbortController();
+    scheduleRequest.current = controller;
     setLoading(true);
     setError(null);
 
     try {
       const weekNumber = getUBBWeekNumber(weekStart);
-      const data = await fetchSchedule(scheduleType, id, weekNumber);
-      setEvents(data);
+      const data = await fetchSchedule(scheduleType, id, weekNumber, {
+        signal: controller.signal,
+        forceRefresh,
+      });
+      if (controller.signal.aborted) return;
+      setSchedule({ ...data, key: scheduleKey });
     } catch (err) {
-      setError("Nie udało się wczytać planu zajęć");
+      if (controller.signal.aborted) return;
+      setError(err instanceof Error ? err.message : "Nie udało się wczytać planu zajęć");
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [scheduleType, id, weekStart]);
+  }, [scheduleType, id, weekStart, scheduleKey]);
 
   useEffect(() => {
-    loadSchedule();
+    void loadSchedule();
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void loadSchedule();
+    };
+    const interval = setInterval(refreshIfVisible, SCHEDULE_CACHE_TTL);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => {
+      scheduleRequest.current?.abort();
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
   }, [loadSchedule]);
 
   const handlePrevWeek = useCallback(() => {
@@ -156,15 +187,15 @@ function SchedulePage() {
   }, []);
 
   const handleNextWeek = useCallback(() => {
-    setWeekStart((prev) => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + 7);
-      return newDate;
-    });
-  }, []);
+    const nextWeek = new Date(weekStart);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    setMobileView({ weekStartTime: nextWeek.getTime(), day: 0 });
+    setWeekStart(nextWeek);
+  }, [weekStart]);
 
   const handleGoToToday = useCallback(() => {
     const currentWeekStart = getWeekStart(new Date());
+    setMobileView({ weekStartTime: currentWeekStart.getTime(), day: (new Date().getDay() + 6) % 7 });
     setWeekStart(prev => prev.getTime() === currentWeekStart.getTime() ? prev : currentWeekStart);
   }, []);
 
@@ -207,7 +238,7 @@ function SchedulePage() {
     window.dispatchEvent(new Event("favorites-changed"));
   }, [id, scheduleType, groupName, groupPath]);
 
-  if (loading) {
+  if (!currentSchedule && !error) {
     return (
       <div className="loading-screen">
         <div className="loader"></div>
@@ -216,20 +247,25 @@ function SchedulePage() {
     );
   }
 
-  if (error) {
+  if (!currentSchedule) {
     return (
       <div className="error-screen">
-        <p>{error}</p>
-        <button onClick={loadSchedule}>Spróbuj ponownie</button>
+        <p role="alert">{error}</p>
+        <button onClick={() => void loadSchedule(true)}>Spróbuj ponownie</button>
       </div>
     );
   }
 
   return (
     <ScheduleGrid
-      events={events}
+      events={currentSchedule.events}
+      refreshing={loading}
+      refreshError={error}
+      onRefresh={() => void loadSchedule(true)}
       scheduleType={scheduleType}
       weekStart={weekStart}
+      mobileView={mobileView}
+      onMobileViewChange={setMobileView}
       groupName={groupName}
       groupPath={groupPath}
       onPrevWeek={handlePrevWeek}

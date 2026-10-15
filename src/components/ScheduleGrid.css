@@ -40,6 +40,20 @@
   font-weight: 400;
 }
 
+.schedule-refresh-error {
+  padding: 10px 20px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--accent-gold);
+  font-size: 12px;
+}
+
+.weekend-toggle:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .favorite-btn {
   background: none;
   border: none;

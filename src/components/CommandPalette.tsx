@@ -39,11 +39,14 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
   }, [isOpen]);
 
   useEffect(() => {
-    if (query.length < 2) {
+    if (!isOpen || query.length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
+    const controller = new AbortController();
+    setResults([]);
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
@@ -51,10 +54,11 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
 
         // Search tree index (groups) and UBB search API (teachers/rooms) in parallel
         const [treeIndex, teacherResults, roomResults] = await Promise.all([
-          fetchTreeIndex() as Promise<SearchResult[]>,
-          searchPlans(query, 'teacher').catch(() => []),
-          searchPlans(query, 'room').catch(() => []),
+          fetchTreeIndex(controller.signal) as Promise<SearchResult[]>,
+          searchPlans(query, 'teacher', controller.signal).catch(() => []),
+          searchPlans(query, 'room', controller.signal).catch(() => []),
         ]);
+        if (controller.signal.aborted) return;
 
         const filtered = treeIndex
           .filter(node => {
@@ -102,12 +106,15 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       } catch {
         /* ignore */
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 200);
 
-    return () => clearTimeout(timer);
-  }, [query]);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, isOpen]);
 
   const handleSelect = useCallback((result: SearchResult) => {
     if (result.scheduleType) {

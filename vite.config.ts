@@ -93,7 +93,7 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /\/api\/schedule\/.*/i,
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/schedule/') && !url.searchParams.has('refresh'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-schedule-cache',
