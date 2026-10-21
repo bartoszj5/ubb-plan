@@ -129,12 +129,16 @@ export function parseScheduleHTMLMeta(html, scheduleType = '0') {
       .map(link => ({ scheduleType: link[1], id: link[2], name: decodeHTMLText(link[3]) }));
     // Group plans include aggregate plans (e.g. type=2), which UBB search omits.
     const groupPlans = links.filter(link => link.scheduleType !== '10' && link.scheduleType !== '20');
+    const teacherPlans = links.filter(link => link.scheduleType === '10');
+    const roomPlans = links.filter(link => link.scheduleType === '20');
     entries.push({
       subject: typedHeading ? typedHeading[1].trim() : heading,
       type: typedHeading ? typedHeading[2].trim() : '',
-      teacher: (String(scheduleType) === '10' ? groupPlans : links.filter(link => link.scheduleType === '10')).map(link => link.name).join(' '),
-      room: (String(scheduleType) === '20' ? groupPlans : links.filter(link => link.scheduleType === '20')).map(link => link.name).join(' '),
+      teacher: (String(scheduleType) === '10' ? groupPlans : teacherPlans).map(link => link.name).join(' '),
+      room: (String(scheduleType) === '20' ? groupPlans : roomPlans).map(link => link.name).join(' '),
       groupPlans,
+      teacherPlans,
+      roomPlans,
       isNotice: !typedHeading,
     });
   }
@@ -310,6 +314,8 @@ export function parseICS(icsData, entries = []) {
         event.teacher = entry.teacher;
         event.room = entry.room;
         if (entry.groupPlans?.length) event.groupPlans = entry.groupPlans;
+        if (entry.teacherPlans?.length) event.teacherPlans = entry.teacherPlans;
+        if (entry.roomPlans?.length) event.roomPlans = entry.roomPlans;
         if (entry.isNotice) event.kind = 'notice';
       } else if (parts.length >= 1) {
         event.subject = parts[0];

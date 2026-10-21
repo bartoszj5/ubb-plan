@@ -96,11 +96,14 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
   const isTeacherSchedule = scheduleType === '10';
 
   const openPlan = useCallback((plan: SchedulePlanLink, pathRoot: string) => {
-    saveGroupMeta(plan.id, {
-      name: plan.name,
-      path: [pathRoot, plan.name],
-      type: plan.scheduleType,
-    });
+    // Older API responses may contain abbreviations; load destination metadata separately.
+    if (plan.scheduleType !== '10') {
+      saveGroupMeta(plan.id, {
+        name: plan.name,
+        path: [pathRoot, plan.name],
+        type: plan.scheduleType,
+      });
+    }
     navigate(`/plan/${plan.scheduleType}/${plan.id}`);
     onClose();
   }, [navigate, onClose]);
@@ -139,20 +142,24 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
     }
   }, [openPlan]);
 
-  const groupPlanLinks = event.groupPlans?.length ? (
-    <div className="event-modal-group-links">
-      {event.groupPlans.map(plan => (
+  const renderPlanLinks = (plans: SchedulePlanLink[] | undefined, pathRoot: string, mono = false) => plans?.length ? (
+    <div className="event-modal-plan-links">
+      {plans.map(plan => (
         <button
           key={`${plan.scheduleType}:${plan.id}`}
-          className="event-modal-value event-modal-plan-link"
-          onClick={() => openPlan(plan, 'Grupy')}
+          className={`event-modal-value event-modal-plan-link${mono ? ' mono' : ''}`}
+          onClick={() => openPlan(plan, pathRoot)}
           disabled={openingPlan}
         >
-          {plan.name}
+          {pathRoot === 'Nauczyciele' && plans.length === 1 ? event.teacherFullName || plan.name : plan.name}
         </button>
       ))}
     </div>
   ) : null;
+
+  const groupPlanLinks = renderPlanLinks(event.groupPlans, 'Grupy');
+  const teacherPlanLinks = renderPlanLinks(event.teacherPlans, 'Nauczyciele');
+  const roomPlanLinks = renderPlanLinks(event.roomPlans, 'Sale', true);
 
   const handleOpenRoomPlan = useCallback(async () => {
     if (!event.room) return;
@@ -243,7 +250,7 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
                   >
                     {event.teacher}
                   </button>
-                ) : event.teacherId ? (
+                ) : teacherPlanLinks ? teacherPlanLinks : event.teacherId ? (
                   <button
                     className="event-modal-value event-modal-teacher-link"
                     onClick={() => {
@@ -270,7 +277,7 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
               {isRoomSchedule ? <CalendarIcon size={16} /> : <MapPinIcon size={16} />}
               <div>
                 <div className="event-modal-label">{isRoomSchedule ? 'Grupa' : 'Sala'}</div>
-                {canOpenRoomPlan ? (
+                {canOpenRoomPlan && roomPlanLinks ? roomPlanLinks : canOpenRoomPlan ? (
                   <button
                     className="event-modal-value mono event-modal-plan-link"
                     onClick={handleOpenRoomPlan}

@@ -31,6 +31,12 @@ export default async function handler(request, response) {
 
     // Enrich events with full names and teacher IDs
     for (const event of events) {
+      if (event.teacherPlans) {
+        event.teacherPlans = event.teacherPlans.map(plan => ({
+          ...plan,
+          name: teacherFullNames[plan.name] || plan.name,
+        }));
+      }
       if (event.subject && subjects[event.subject]) {
         event.subjectFullName = subjects[event.subject];
       }

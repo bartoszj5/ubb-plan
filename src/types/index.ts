@@ -15,6 +15,8 @@ export interface MobileScheduleView {
 
 export interface ScheduleEvent {
   groupPlans?: SchedulePlanLink[];
+  teacherPlans?: SchedulePlanLink[];
+  roomPlans?: SchedulePlanLink[];
   kind?: 'notice';
   notices?: ScheduleNotice[];
   start: string;

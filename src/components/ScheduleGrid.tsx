@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { ScheduleEvent, MobileScheduleView } from '../types';
+import type { ScheduleEvent, SchedulePlanLink, MobileScheduleView } from '../types';
 import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon, CalendarIcon, InfoIcon } from './Icons';
 import EventModal from './EventModal';
 import { searchPlans } from '../utils/api';
@@ -369,6 +369,15 @@ export default function ScheduleGrid({
   const canOpenRoomPlan = scheduleType !== '20';
   const isRoomSchedule = scheduleType === '20';
 
+  const openPlan = useCallback((plan: SchedulePlanLink, pathRoot: string) => {
+    saveGroupMeta(plan.id, {
+      name: plan.name,
+      path: [pathRoot, plan.name],
+      type: plan.scheduleType,
+    });
+    navigate(`/plan/${plan.scheduleType}/${plan.id}`);
+  }, [navigate]);
+
   const openPlanFromSearch = useCallback(async (
     query: string,
     type: 'room' | 'group',
@@ -385,18 +394,13 @@ export default function ScheduleGrid({
 
       if (!plan) return;
 
-      saveGroupMeta(plan.id, {
-        name: plan.name,
-        path: [pathRoot, plan.name],
-        type: plan.scheduleType,
-      });
-      navigate(`/plan/${plan.scheduleType}/${plan.id}`);
+      openPlan(plan, pathRoot);
     } catch (err) {
       console.error(`Failed to open ${type} plan:`, err);
     } finally {
       setOpeningPlan(null);
     }
-  }, [navigate]);
+  }, [openPlan]);
 
   const openRoomPlan = useCallback(async (room: string) => {
     await openPlanFromSearch(room, 'room', 'Sale');
@@ -513,6 +517,7 @@ export default function ScheduleGrid({
               {eventsByDay.get(dayIndex)?.map((event, i) => {
                 const notices = getEventNotices(event);
                 const noticeLabel = getNoticeLabel(notices);
+                const roomPlans = isRoomSchedule ? event.groupPlans : event.roomPlans;
                 return (
                 <div
                   key={i}
@@ -522,7 +527,7 @@ export default function ScheduleGrid({
                   onClick={() => setModalEvent(event)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setModalEvent(event); } }}
+                  onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setModalEvent(event); } }}
                 >
                   <span className="event-subject">{event.subjectFullName || event.subject}</span>
                   {(event.type || notices.length > 0) && (
@@ -541,7 +546,21 @@ export default function ScheduleGrid({
                       <ClockIcon size={10} />
                       {formatEventTime(event)}
                     </span>
-                    {event.room && canOpenRoomPlan ? (
+                    {roomPlans?.length ? roomPlans.map(plan => (
+                      <button
+                        key={`${plan.scheduleType}:${plan.id}`}
+                        type="button"
+                        className="event-room event-room-link"
+                        aria-label={`Pokaż plan ${isRoomSchedule ? 'grupy' : 'sali'} ${plan.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPlan(plan, isRoomSchedule ? 'Grupy' : 'Sale');
+                        }}
+                      >
+                        {isRoomSchedule ? <CalendarIcon size={10} /> : <MapPinIcon size={10} />}
+                        {plan.name}
+                      </button>
+                    )) : event.room && canOpenRoomPlan ? (
                       <button
                         type="button"
                         className="event-room event-room-link"

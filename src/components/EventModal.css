@@ -258,7 +258,7 @@
   opacity: 0.7;
 }
 
-.event-modal-group-links {
+.event-modal-plan-links {
   display: flex;
   flex-direction: column;
   gap: 6px;

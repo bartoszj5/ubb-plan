@@ -74,3 +74,42 @@ test('a valid empty calendar is successful and manual refresh is not cached', as
   assert.equal(response.headers['Cache-Control'], 'no-store');
   assert.ok(Number(response.headers['X-UBB-Fetched-At']) > 0);
 });
+
+test('multiple teacher links receive full names without changing their destinations', async t => {
+  const names = { '910001': 'Nauczyciel Pierwszy', '910002': 'Nauczyciel Drugi', '910003': 'Nauczyciel Trzeci' };
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async url => {
+    requests.push(url);
+    if (url.includes('cvsfile')) {
+      return new Response('BEGIN:VEVENT\r\nDTSTART:20261021T143000Z\r\nDTEND:20261021T160000Z\r\nSUMMARY:Ja lek NP ND NT L152\r\nEND:VEVENT');
+    }
+    const teacherId = new URL(url).searchParams.get('id');
+    if (names[teacherId]) return new Response(`<h2>Plan zajęć - ${names[teacherId]}, semestr zimowy</h2>`);
+    return new Response('<div id="course_1">Ja, lek<br /><a href="plan.php?type=10&id=910001">NP</a> <a href="plan.php?type=10&id=910002">ND</a> <a href="plan.php?type=10&id=910003">NT</a><br /><a href="plan.php?type=20&id=6617">L152</a></div>');
+  });
+  const response = responseRecorder();
+  await scheduleHandler({ query: { type: '0', id: '185657' } }, response);
+  assert.equal(response.code, 200);
+  const [event] = response.body;
+  assert.deepEqual(event.teacherPlans, [
+    { scheduleType: '10', id: '910001', name: names['910001'] },
+    { scheduleType: '10', id: '910002', name: names['910002'] },
+    { scheduleType: '10', id: '910003', name: names['910003'] },
+  ]);
+  assert.equal(event.teacher, 'NP ND NT');
+  assert.deepEqual(event.roomPlans, [{ scheduleType: '20', id: '6617', name: 'L152' }]);
+  assert.equal(requests.length, 5); // ICS, HTML and the three existing teacher lookups.
+});
+
+test('unavailable teacher names retain a working abbreviated link', async t => {
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url.includes('type=10')) return new Response('Unavailable', { status: 503 });
+    return new Response(url.includes('cvsfile')
+      ? 'BEGIN:VEVENT\r\nDTSTART:20261021T143000Z\r\nSUMMARY:Ja lek Brak L152\r\nEND:VEVENT'
+      : '<div id="course_1">Ja, lek<br /><a href="plan.php?type=10&id=910004">Brak</a><br /><a href="plan.php?type=20&id=6617">L152</a></div>');
+  });
+  const response = responseRecorder();
+  await scheduleHandler({ query: { type: '0', id: '185657' } }, response);
+  assert.equal(response.code, 200);
+  assert.deepEqual(response.body[0].teacherPlans, [{ scheduleType: '10', id: '910004', name: 'Brak' }]);
+});

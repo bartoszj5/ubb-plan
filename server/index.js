@@ -226,6 +226,12 @@ app.get('/api/schedule/:type/:id', async (req, res) => {
         const teacherFullNames = await fetchTeacherFullNames(teachers);
 
         for (const event of events) {
+            if (event.teacherPlans) {
+                event.teacherPlans = event.teacherPlans.map(plan => ({
+                    ...plan,
+                    name: teacherFullNames[plan.name] || plan.name,
+                }));
+            }
             if (event.subject && subjects[event.subject]) {
                 event.subjectFullName = subjects[event.subject];
             }

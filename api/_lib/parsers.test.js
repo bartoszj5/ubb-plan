@@ -18,6 +18,29 @@ const lesson = 'Ja lek IlSz BGó MDo L152 L136A B210';
 const notice = 'Przeniesienie zajęć z sali L152 07.10  BGó L325';
 const { entries } = parseScheduleHTMLMeta(html);
 
+test('each teacher and room keeps its own plan destination', () => {
+  const [event] = parseICS(icsEvent(lesson), entries);
+  assert.deepEqual(event.teacherPlans, [
+    { scheduleType: '10', id: '112083', name: 'IlSz' },
+    { scheduleType: '10', id: '112079', name: 'BGó' },
+    { scheduleType: '10', id: '184466', name: 'MDo' },
+  ]);
+  assert.deepEqual(event.roomPlans, [
+    { scheduleType: '20', id: '6617', name: 'L152' },
+    { scheduleType: '20', id: '21142', name: 'L136A' },
+    { scheduleType: '20', id: '6571', name: 'B210' },
+  ]);
+  assert.equal(event.teacher, 'IlSz BGó MDo');
+  assert.equal(event.room, 'L152 L136A B210');
+});
+
+test('spaces inside a teacher or room name do not create extra destinations', () => {
+  const html = '<div id="course_1">Ja, lek<br /><a href="plan.php?type=10&id=112079">Jan Kowalski</a><br /><a href="plan.php?type=20&id=104980">nauczanie zdalne</a></div>';
+  const [event] = parseICS(icsEvent('Ja lek Jan Kowalski nauczanie zdalne'), parseScheduleHTMLMeta(html).entries);
+  assert.deepEqual(event.teacherPlans, [{ scheduleType: '10', id: '112079', name: 'Jan Kowalski' }]);
+  assert.deepEqual(event.roomPlans, [{ scheduleType: '20', id: '104980', name: 'nauczanie zdalne' }]);
+});
+
 test('UBB notice preserves its full title, teacher and new room', () => {
   const [event] = parseICS(icsEvent(notice), entries);
   assert.equal(event.kind, 'notice');
