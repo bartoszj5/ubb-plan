@@ -122,7 +122,7 @@ export async function fetchSchedule(
 ): Promise<ScheduleData> {
   const { signal, forceRefresh = false } = options;
   signal?.throwIfAborted();
-  const CACHE_KEY = `ubb-schedule:v3:${type}:${id}:${week ?? 'current'}`;
+  const CACHE_KEY = `ubb-schedule:v4:${type}:${id}:${week ?? 'current'}`;
   const cached = forceRefresh ? null : getSessionCache<ScheduleEvent[]>(CACHE_KEY, SCHEDULE_CACHE_TTL);
   if (cached) return { events: cached.data, fetchedAt: cached.timestamp };
 

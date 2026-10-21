@@ -72,6 +72,35 @@ test('teacher and room schedules preserve their group fields', () => {
   assert.equal(teacherEvent.room, 'L152');
   assert.equal(roomEvent.teacher, 'BGó');
   assert.equal(roomEvent.room, 'Group');
+  const groupPlan = { scheduleType: '0', id: '185657', name: 'Group' };
+  assert.deepEqual(teacherEvent.groupPlans, [groupPlan]);
+  assert.deepEqual(roomEvent.groupPlans, [groupPlan]);
+});
+
+test('aggregate group links retain their type and ID on teacher and room schedules', () => {
+  const groupLink = '<a href="plan.php?type=2&amp;id=185624">Inf/S/Ist/7sem/SKiBS</a>';
+  for (const scheduleType of ['10', '20']) {
+    const links = scheduleType === '10'
+      ? `${groupLink}<br /><a href="plan.php?type=20&id=100148">A304A</a>`
+      : `<a href="plan.php?type=10&id=112215">ŁW</a><br />${groupLink}`;
+    const html = `<div id="course_2" class="coursediv">SrWII, wyk<br />${links}</div>`;
+    const summary = scheduleType === '10' ? 'SrWII wyk Inf/S/Ist/7sem/SKiBS A304A' : 'SrWII wyk ŁW Inf/S/Ist/7sem/SKiBS';
+    const [event] = parseICS(icsEvent(summary), parseScheduleHTMLMeta(html, scheduleType).entries);
+    assert.deepEqual(event.groupPlans, [{ scheduleType: '2', id: '185624', name: 'Inf/S/Ist/7sem/SKiBS' }]);
+    assert.equal(event.teacher, scheduleType === '10' ? 'Inf/S/Ist/7sem/SKiBS' : 'ŁW');
+    assert.equal(event.room, scheduleType === '10' ? 'A304A' : 'Inf/S/Ist/7sem/SKiBS');
+  }
+});
+
+test('multiple groups keep separate destinations, including names with spaces', () => {
+  const html = '<div id="course_1" class="coursediv">Io, wyk<br /><a href="plan.php?type=2&id=158490">Inf/S/Ist/5sem/IO</a> <a href="plan.php?type=0&id=185625">Grupa A &amp; B</a><br /><a href="plan.php?type=20&id=6622">L120</a></div>';
+  const [event] = parseICS(icsEvent('Io wyk Inf/S/Ist/5sem/IO Grupa A & B L120'), parseScheduleHTMLMeta(html, '10').entries);
+  assert.deepEqual(event.groupPlans, [
+    { scheduleType: '2', id: '158490', name: 'Inf/S/Ist/5sem/IO' },
+    { scheduleType: '0', id: '185625', name: 'Grupa A & B' },
+  ]);
+  assert.equal(event.teacher, 'Inf/S/Ist/5sem/IO Grupa A & B');
+  assert.equal(event.room, 'L120');
 });
 
 test('ICS unfolds and decodes text without changing floating or UTC times', () => {

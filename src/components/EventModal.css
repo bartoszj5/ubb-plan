@@ -258,6 +258,18 @@
   opacity: 0.7;
 }
 
+.event-modal-group-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-modal-plan-error {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* Copy button */
 .event-modal-copy-btn {
   display: inline-flex;

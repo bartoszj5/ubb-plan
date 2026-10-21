@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import type { ScheduleEvent } from '../types';
+import type { ScheduleEvent, SchedulePlanLink } from '../types';
 import { XIcon, ClockIcon, UserIcon, MapPinIcon, InfoIcon, WifiIcon, CalendarIcon } from './Icons';
 import { saveGroupMeta } from '../utils/groupMeta';
 import { searchPlans } from '../utils/api';
@@ -44,7 +44,11 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [openingPlan, setOpeningPlan] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const planRequest = useRef<AbortController | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => () => planRequest.current?.abort(), []);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -91,6 +95,16 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
   const isRoomSchedule = scheduleType === '20';
   const isTeacherSchedule = scheduleType === '10';
 
+  const openPlan = useCallback((plan: SchedulePlanLink, pathRoot: string) => {
+    saveGroupMeta(plan.id, {
+      name: plan.name,
+      path: [pathRoot, plan.name],
+      type: plan.scheduleType,
+    });
+    navigate(`/plan/${plan.scheduleType}/${plan.id}`);
+    onClose();
+  }, [navigate, onClose]);
+
   const openPlanFromSearch = useCallback(async (
     query: string,
     type: 'room' | 'group',
@@ -99,27 +113,46 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
     const name = query.trim();
     if (!name) return;
 
+    planRequest.current?.abort();
+    const controller = new AbortController();
+    planRequest.current = controller;
     setOpeningPlan(true);
+    setPlanError(null);
     try {
-      const results = await searchPlans(name, type);
+      const results = await searchPlans(name, type, controller.signal);
+      controller.signal.throwIfAborted();
       const normalizedName = name.toLowerCase();
-      const plan = results.find(result => result.name.toLowerCase() === normalizedName) ?? results[0];
+      const plan = results.find(result => result.name.toLowerCase() === normalizedName);
 
-      if (!plan) return;
+      if (!plan) {
+        setPlanError(`Nie znaleziono planu dla „${name}”. Spróbuj odświeżyć plan zajęć.`);
+        return;
+      }
 
-      saveGroupMeta(plan.id, {
-        name: plan.name,
-        path: [pathRoot, plan.name],
-        type: plan.scheduleType,
-      });
-      navigate(`/plan/${plan.scheduleType}/${plan.id}`);
-      onClose();
+      openPlan(plan, pathRoot);
     } catch (err) {
+      if (controller.signal.aborted) return;
+      setPlanError('Nie udało się otworzyć planu. Spróbuj ponownie.');
       console.error(`Failed to open ${type} plan:`, err);
     } finally {
-      setOpeningPlan(false);
+      if (!controller.signal.aborted) setOpeningPlan(false);
     }
-  }, [navigate, onClose]);
+  }, [openPlan]);
+
+  const groupPlanLinks = event.groupPlans?.length ? (
+    <div className="event-modal-group-links">
+      {event.groupPlans.map(plan => (
+        <button
+          key={`${plan.scheduleType}:${plan.id}`}
+          className="event-modal-value event-modal-plan-link"
+          onClick={() => openPlan(plan, 'Grupy')}
+          disabled={openingPlan}
+        >
+          {plan.name}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   const handleOpenRoomPlan = useCallback(async () => {
     if (!event.room) return;
@@ -163,6 +196,7 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
           </button>
         </div>
         <div className="event-modal-body">
+          {planError && <div className="event-modal-plan-error" role="alert">{planError}</div>}
           {notices.length > 0 && (
             <div className="event-modal-notices">
               {notices.map((notice, index) => (
@@ -201,7 +235,7 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
               {isTeacherSchedule ? <CalendarIcon size={16} /> : <UserIcon size={16} />}
               <div>
                 <div className="event-modal-label">{isTeacherSchedule ? 'Grupa' : 'Prowadzący'}</div>
-                {isTeacherSchedule ? (
+                {isTeacherSchedule && groupPlanLinks ? groupPlanLinks : isTeacherSchedule ? (
                   <button
                     className="event-modal-value event-modal-plan-link"
                     onClick={handleOpenTeacherScheduleGroupPlan}
@@ -244,7 +278,7 @@ export default function EventModal({ event, scheduleType, onClose }: EventModalP
                   >
                     {event.room}
                   </button>
-                ) : isRoomSchedule ? (
+                ) : isRoomSchedule && groupPlanLinks ? groupPlanLinks : isRoomSchedule ? (
                   <button
                     className="event-modal-value mono event-modal-plan-link"
                     onClick={handleOpenGroupPlan}

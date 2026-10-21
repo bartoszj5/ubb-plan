@@ -125,12 +125,16 @@ export function parseScheduleHTMLMeta(html, scheduleType = '0') {
     const content = course[1].replace(/<img\b[^>]*>/gi, '');
     const heading = decodeHTMLText(content.split(/<br\s*\/?\s*>/i)[0]);
     const typedHeading = heading.match(/^(.*),\s*(wyk|ćw|cw|lab|sem|lek|proj|konw|wykład|ćwiczenia|laboratorium|seminarium|lektorat|projekt|konwersatorium)\.?$/iu);
-    const links = [...content.matchAll(/<a[^>]*href="plan\.php\?type=(\d+)&(?:amp;)?id=\d+"[^>]*>([^<]+)<\/a>/g)];
+    const links = [...content.matchAll(/<a[^>]*href="plan\.php\?type=(\d+)&(?:amp;)?id=(\d+)"[^>]*>([^<]+)<\/a>/g)]
+      .map(link => ({ scheduleType: link[1], id: link[2], name: decodeHTMLText(link[3]) }));
+    // Group plans include aggregate plans (e.g. type=2), which UBB search omits.
+    const groupPlans = links.filter(link => link.scheduleType !== '10' && link.scheduleType !== '20');
     entries.push({
       subject: typedHeading ? typedHeading[1].trim() : heading,
       type: typedHeading ? typedHeading[2].trim() : '',
-      teacher: links.filter(link => link[1] === (String(scheduleType) === '10' ? '0' : '10')).map(link => decodeHTMLText(link[2])).join(' '),
-      room: links.filter(link => link[1] === (String(scheduleType) === '20' ? '0' : '20')).map(link => decodeHTMLText(link[2])).join(' '),
+      teacher: (String(scheduleType) === '10' ? groupPlans : links.filter(link => link.scheduleType === '10')).map(link => link.name).join(' '),
+      room: (String(scheduleType) === '20' ? groupPlans : links.filter(link => link.scheduleType === '20')).map(link => link.name).join(' '),
+      groupPlans,
       isNotice: !typedHeading,
     });
   }
@@ -305,6 +309,7 @@ export function parseICS(icsData, entries = []) {
         event.type = entry.type;
         event.teacher = entry.teacher;
         event.room = entry.room;
+        if (entry.groupPlans?.length) event.groupPlans = entry.groupPlans;
         if (entry.isNotice) event.kind = 'notice';
       } else if (parts.length >= 1) {
         event.subject = parts[0];
