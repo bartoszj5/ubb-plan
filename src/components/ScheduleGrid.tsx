@@ -36,6 +36,7 @@ interface ScheduleGridProps {
   onSetMyPlan: () => void;
   onReturnToMyPlan: () => void;
   onSearch: () => void;
+  focusTodayRequest: number;
   initialScrollTop: number;
   onScrollChange: (top: number) => void;
 }
@@ -44,8 +45,11 @@ const DAY_FULL = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'S
 type ViewMode = 'list' | 'grid';
 function savedMode(key: string, fallback: ViewMode): ViewMode { const value = readStorage(key, fallback); return value === 'grid' || value === 'list' ? value : fallback; }
 
-interface EventCardProps { event: ScheduleEvent; scheduleType: string; onOpen: (event: ScheduleEvent) => void; compact?: boolean; status?: string; style?: CSSProperties }
-function EventCard({ event, scheduleType, onOpen, compact = false, status, style }: EventCardProps) {
+interface EventCardProps { event: ScheduleEvent; scheduleType: string; onOpen: (event: ScheduleEvent) => void; compact?: boolean; status?: string; currentTime?: Date; style?: CSSProperties }
+function EventCard({ event, scheduleType, onOpen, compact = false, status, currentTime, style }: EventCardProps) {
+  const progress = currentTime && status === 'Trwa teraz'
+    ? Math.max(0, Math.min(100, (+currentTime - +new Date(event.start)) / (+new Date(event.end) - +new Date(event.start)) * 100)) : null;
+  const remaining = currentTime ? Math.max(0, Math.ceil((+new Date(event.end) - +currentTime) / 60000)) : 0;
   const type = eventType(event.type);
   const notices = getEventNotices(event);
   const title = event.subjectFullName || event.subject;
@@ -53,14 +57,19 @@ function EventCard({ event, scheduleType, onOpen, compact = false, status, style
   const PlaceIcon = scheduleType === '20' ? CalendarIcon : isRemoteEvent(event) ? WifiIcon : MapPinIcon;
   return <button type="button" className={`event-card ${compact ? 'event-compact' : ''} ${status ? 'event-highlighted' : ''} ${event.kind === 'notice' ? 'event-standalone-notice' : ''}`}
     style={{ '--event-color': type.color, ...style } as CSSProperties} onClick={() => onOpen(event)}
+    data-current={status === 'Trwa teraz' || undefined}
     title={`${title} · ${type.label} · ${eventTime(event)} · ${place}`}
-    aria-label={`${title}, ${type.label}, ${eventTime(event)}, ${place}${status ? `, ${status}` : ''}`}>
+    aria-label={`${title}, ${type.label}, ${eventTime(event)}, ${place}${status ? `, ${status}` : ''}${progress !== null && currentTime ? `, teraz ${formatTime(currentTime)}, do końca ${remaining} min` : ''}`}>
     <span className="event-card-top"><span className="event-type">{event.kind === 'notice' ? 'Informacja' : type.label}</span>{status && <span className="event-status">{status}</span>}</span>
     <span className="event-subject">{title}</span>
     <span className="event-info"><span className="event-time"><ClockIcon size={15} />{eventTime(event)}</span>
     {(event.room || event.roomPlans?.length || event.kind !== 'notice') && <span className="event-place"><PlaceIcon size={17} />{place}</span>}</span>
     {scheduleType !== '10' && event.teacher && <span className="event-teacher">{(event.teacherPlans?.length ?? 0) > 1 ? `${event.teacherPlans!.length} prowadzących · szczegóły po otwarciu` : event.teacherFullName || event.teacherPlans?.map(p => p.name).join(', ') || event.teacher}</span>}
     {scheduleType === '10' && (event.groupPlans?.length || event.teacher) && <span className="event-teacher">{event.groupPlans?.map(p => p.name).join(', ') || event.teacher}</span>}
+    {progress !== null && currentTime && <span className="lesson-progress">
+      <span className="lesson-progress-labels"><span>Teraz <time dateTime={currentTime.toISOString()}>{formatTime(currentTime)}</time></span><span>Do końca {remaining} min</span></span>
+      <span className="lesson-progress-track" role="progressbar" aria-label="Postęp zajęć" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)} aria-valuetext={`Teraz ${formatTime(currentTime)}, do końca ${remaining} min`}><span style={{ width: `${progress}%` }} /></span>
+    </span>}
     {notices.length > 0 && <span className="event-notice-badge"><InfoIcon size={14} />{getNoticeLabel(notices)}</span>}
   </button>;
 }
@@ -111,14 +120,21 @@ export default function ScheduleGrid(props: ScheduleGridProps) {
     if (selected.offsetLeft < tabs.scrollLeft) tabs.scrollLeft = selected.offsetLeft;
     else if (selected.offsetLeft + selected.offsetWidth > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = selected.offsetLeft + selected.offsetWidth - tabs.clientWidth;
   }, [day, includeWeekend, singleDay]);
-  const scrollKey = `${dateKey(weekStart)}:${singleDay ? day : 'week'}:${mode}`;
+  const scrollKey = `${dateKey(weekStart)}:${singleDay ? day : 'week'}:${mode}:${props.focusTodayRequest}`;
   useLayoutEffect(() => {
     const container = scrollRef.current;
     if (!container || !hasData) return;
     if (lastScrollKey.current === scrollKey) return;
-    container.scrollTop = restored.current ? 0 : props.initialScrollTop;
+    const target = mode === 'list'
+      ? container.querySelector<HTMLElement>('[data-current="true"], .agenda-now')
+      : container.querySelector<HTMLElement>('.grid-day.today [data-current="true"]') ?? container.querySelector<HTMLElement>('.time-indicator');
+    if (isToday && singleDay && target) {
+      const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+      const headingHeight = isMobile && mode === 'list' ? container.querySelector('.agenda-heading')?.getBoundingClientRect().height ?? 0 : 0;
+      container.scrollTop = Math.max(0, offset - (mode === 'list' ? headingHeight + 12 : 24));
+    } else container.scrollTop = restored.current ? 0 : props.initialScrollTop;
     restored.current = true; lastScrollKey.current = scrollKey;
-  }, [hasData, scrollKey, props.initialScrollTop]);
+  }, [hasData, scrollKey, props.initialScrollTop, isToday, singleDay, mode, isMobile]);
 
   function selectDay(index: number) { onMobileViewChange({ weekStartTime: weekStart.getTime(), day: index }); }
   function chooseDate(value: string) {
@@ -153,6 +169,14 @@ export default function ScheduleGrid(props: ScheduleGridProps) {
   const emptyDay = <div className="empty-plan"><CalendarIcon size={32} /><h3>Brak zajęć w {refreshError ? 'pobranym ' : ''}planie</h3><p>{!singleDay && !weekEvents.length ? datesLabel : dayLabel}</p><p className="empty-help">{refreshError ? 'Nie udało się ponownie sprawdzić danych. Spróbuj odświeżyć plan.' : 'Sprawdź kolejny termin lub wybierz inną datę.'}</p>
     <button type="button" className="primary-button" onClick={() => nextDayEvent ? onChooseDate(new Date(nextDayEvent.start)) : props.onNextWeek()}>{nextDayEvent ? 'Następny dzień z zajęciami' : 'Sprawdź kolejny tydzień'}</button></div>;
 
+  const nowIndex = dayEvents.findIndex(event => event.kind !== 'notice' && +new Date(event.end) > +now);
+  const nowMarker = isToday && !hasCurrent ? <div className="agenda-now" aria-label={`Aktualna godzina ${formatTime(now)}`}><span>Teraz {formatTime(now)}</span></div> : null;
+  const viewControls = <div className="view-controls"><div className="view-switch" role="group" aria-label="Widok planu"><button type="button" aria-pressed={mode === 'list'} onClick={() => changeMode('list')}>Lista</button><button type="button" aria-pressed={mode === 'grid'} onClick={() => changeMode('grid')}>Siatka</button></div>
+    {hasWeekendEvents ? <span className="weekend-required">Weekend w planie</span> : <label className="weekend-option"><input type="checkbox" checked={includeWeekend} onChange={e => { setShowWeekend(e.target.checked); writeStorage('ubb-show-weekend:v1', e.target.checked); if (!e.target.checked && day >= 5) selectDay(0); }} />Weekend</label>}
+  </div>;
+  const dataStatus = <div className="data-status"><span role="status" aria-live="polite">{loading ? hasData ? 'Odświeżanie planu…' : 'Wczytywanie planu…' : fetchedAt ? `Pobrano z UBB ${new Date(fetchedAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} o ${formatTime(new Date(fetchedAt))}` : 'Plan nie został pobrany'}</span>
+    <button type="button" className="text-button" onClick={props.onRefresh} disabled={loading}>Odśwież</button></div>;
+
   const changes = hasData && changedEvents.length > 0 ? <section className="plan-changes"><h2><InfoIcon size={18} />Informacje do zajęć w tym tygodniu</h2>{changedEvents.map((event, index) => <button type="button" key={index} onClick={() => setModalEvent(event)}><strong>{getNoticeLabel(getEventNotices(event))}</strong><span>{event.subjectFullName || event.subject} · {new Date(event.start).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</span><ChevronRightIcon size={17} /></button>)}</section> : null;
 
   return <div className={`schedule-page ${fitWeek ? 'fit-week' : ''}`}>
@@ -164,6 +188,7 @@ export default function ScheduleGrid(props: ScheduleGridProps) {
           <details className="mobile-plan-options" data-shortcuts-blocked><summary className="icon-button" aria-label="Opcje planu"><InfoIcon size={21} /></summary><div className="plan-options-panel">
             <button type="button" className="text-button" onClick={props.onSearch}><SearchIcon size={17} />Zmień plan</button>
             <button type="button" className="text-button" aria-pressed={props.isMyPlan} onClick={props.onSetMyPlan}><CalendarIcon size={17} />{props.isMyPlan ? 'Usuń ustawienie mojego planu' : 'Ustaw jako mój plan'}</button>
+            <p>{presentation.subtitle}</p>
             <strong>{props.groupName}</strong><p>{props.groupPath.join(' › ')}</p>
             {props.isMyPlan && <p>Ten plan otwiera się na stronie głównej.</p>}
           </div></details></div>
@@ -178,12 +203,9 @@ export default function ScheduleGrid(props: ScheduleGridProps) {
       <label className="date-picker"><span className="sr-only">Wybierz datę</span><input type="date" aria-label="Wybierz datę" value={dateKey(selectedDate)} onInput={e => chooseDate(e.currentTarget.value)} onChange={e => chooseDate(e.target.value)} /></label>
       <button type="button" className="icon-button" onClick={props.onNextWeek} aria-label="Następny tydzień"><ChevronRightIcon size={20} /></button>
       <button type="button" className="today-button" onClick={props.onGoToToday}>Dziś</button>
-    </div><div className="view-controls"><div className="view-switch" role="group" aria-label="Widok planu"><button type="button" aria-pressed={mode === 'list'} onClick={() => changeMode('list')}>Lista</button><button type="button" aria-pressed={mode === 'grid'} onClick={() => changeMode('grid')}>Siatka</button></div>
-      {hasWeekendEvents ? <span className="weekend-required">Weekend w planie</span> : <label className="weekend-option"><input type="checkbox" checked={includeWeekend} onChange={e => { setShowWeekend(e.target.checked); writeStorage('ubb-show-weekend:v1', e.target.checked); if (!e.target.checked && day >= 5) selectDay(0); }} />Weekend</label>}
-    </div></div>
+    </div>{viewControls}</div>
 
-    <div className="data-status"><span role="status" aria-live="polite">{loading ? hasData ? 'Odświeżanie planu…' : 'Wczytywanie planu…' : fetchedAt ? `Pobrano z UBB ${new Date(fetchedAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} o ${formatTime(new Date(fetchedAt))}` : 'Plan nie został pobrany'}</span>
-      <button type="button" className="text-button" onClick={props.onRefresh} disabled={loading}>Odśwież</button></div>
+    {dataStatus}
     {refreshError && <div className="schedule-error" role="alert"><InfoIcon size={18} /><span>{refreshError}{hasData ? ' Wyświetlamy poprzednio pobrany plan.' : ''}</span><button type="button" className="text-button" disabled={loading} onClick={props.onRefresh}>Spróbuj ponownie</button></div>}
 
     {singleDay && <div className="day-tabs" ref={tabsRef} role="tablist" aria-label="Dzień tygodnia" data-shortcuts-blocked>{visibleDates.map((date, index) => <button type="button" key={dateKey(date)} role="tab" id={`day-tab-${index}`} aria-controls="day-panel"
@@ -212,8 +234,9 @@ export default function ScheduleGrid(props: ScheduleGridProps) {
           {isToday && lastEnd && +lastEnd <= +now && <p className="day-finished">Na dziś koniec zajęć w tym planie.</p>}
           {dayEvents.length ? <div className="agenda-events">{dayEvents.map((event, index) => <div key={`${event.start}:${event.subject}:${index}`}>
             {gaps.has(event) && <p className="agenda-break">Przerwa {gaps.get(event)} min</p>}
-            <EventCard event={event} scheduleType={scheduleType} onOpen={setModalEvent} status={eventStatus(event)} />
-          </div>)}</div> : emptyDay}
+            {index === nowIndex && nowMarker}
+            <EventCard event={event} scheduleType={scheduleType} onOpen={setModalEvent} status={eventStatus(event)} currentTime={now} />
+          </div>)}{nowIndex === -1 && nowMarker}</div> : <>{nowMarker}{emptyDay}</>}
         </div>
         : !weekEvents.length || (isMobile && !dayEvents.length) ? emptyDay
         : <div className="week-grid" style={{ '--day-count': singleDay ? 1 : visibleDates.length, '--hour-count': hourCount } as CSSProperties}>
@@ -230,7 +253,7 @@ export default function ScheduleGrid(props: ScheduleGridProps) {
                   const start = new Date(event.start), end = new Date(event.end);
                   const from = start.getHours() + start.getMinutes() / 60;
                   const duration = Math.min((+end - +start) / 3600000, 24 - from);
-                  return <EventCard key={`${event.start}:${event.subject}:${index}`} event={event} scheduleType={scheduleType} onOpen={setModalEvent} compact={duration <= 1}
+                  return <EventCard key={`${event.start}:${event.subject}:${index}`} event={event} scheduleType={scheduleType} onOpen={setModalEvent} compact={duration <= 1} status={eventStatus(event)}
                     style={{ position: 'absolute', top: fitWeek ? `${(from - startHour) / hourCount * 100}%` : (from - startHour) * hourHeight, height: fitWeek ? `calc(${duration / hourCount * 100}% - 3px)` : Math.max(32, duration * hourHeight - 4), left: `calc(${column / columns * 100}% + 3px)`, width: `calc(${100 / columns}% - 6px)` }} />;
                 })}
               </div>

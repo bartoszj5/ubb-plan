@@ -43,6 +43,7 @@ function SchedulePage({ type, id, library, onSearch, onReturn, targetDate }: Sch
   });
   const [weekStart, setWeekStart] = useState(() => initialView ? getWeekStart(new Date(`${initialView.weekStart}T00:00:00`)) : getWeekStart(new Date()));
   const [mobileView, setMobileView] = useState<MobileScheduleView>(() => ({ weekStartTime: weekStart.getTime(), day: initialView?.day ?? (new Date().getDay() + 6) % 7 }));
+  const [focusTodayRequest, setFocusTodayRequest] = useState(0);
   const [meta, setMeta] = useState(() => getGroupMeta(id, type));
   const [schedule, setSchedule] = useState<(ScheduleData & { key: string }) | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,7 +103,10 @@ function SchedulePage({ type, id, library, onSearch, onReturn, targetDate }: Sch
   }, [key]);
   const prevWeek = useCallback(() => updateView(addDays(weekStart, -7), 0), [updateView, weekStart]);
   const nextWeek = useCallback(() => updateView(addDays(weekStart, 7), 0), [updateView, weekStart]);
-  const goToToday = useCallback(() => updateView(getWeekStart(new Date()), (new Date().getDay() + 6) % 7), [updateView]);
+  const goToToday = useCallback(() => {
+    updateView(getWeekStart(new Date()), (new Date().getDay() + 6) % 7);
+    setFocusTodayRequest(value => value + 1);
+  }, [updateView]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -128,6 +132,7 @@ function SchedulePage({ type, id, library, onSearch, onReturn, targetDate }: Sch
     isMyPlan={library.myPlan ? planKey(library.myPlan) === key : false} hasMyPlan={!!library.myPlan}
     onSetMyPlan={() => setMyPlan(library.myPlan && planKey(library.myPlan) === key ? null : currentPlan)}
     onReturnToMyPlan={() => { if (library.myPlan) onReturn(library.myPlan); }} onSearch={onSearch}
+    focusTodayRequest={focusTodayRequest}
     initialScrollTop={initialView?.scrollTop ?? 0}
     onScrollChange={scrollTop => savePlanView(key, { weekStart: dateKey(weekStart), day: mobileView.day, scrollTop })} />;
 }
