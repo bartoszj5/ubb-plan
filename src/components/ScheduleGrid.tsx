@@ -1,620 +1,246 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { ScheduleEvent, SchedulePlanLink, MobileScheduleView } from '../types';
-import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, WifiIcon, CalendarIcon, InfoIcon } from './Icons';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import type { ScheduleEvent, MobileScheduleView } from '../types';
+import { StarIcon, StarOutlineIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, MapPinIcon, CalendarIcon, InfoIcon, SearchIcon, WifiIcon } from './Icons';
 import EventModal from './EventModal';
-import { searchPlans } from '../utils/api';
-import { saveGroupMeta } from '../utils/groupMeta';
-import { getEventNotices, getNoticeLabel, formatNotice } from '../utils/scheduleNotices';
+import ScheduleLoader from './ScheduleLoader';
+import { getEventNotices, getNoticeLabel } from '../utils/scheduleNotices';
+import { getPlanPresentation } from '../utils/plans';
+import { addDays, agendaGaps, dateKey, eventPlace, eventTime, eventType, formatTime, isRemoteEvent, positionEvents, sameDay } from '../utils/schedule';
+import { readStorage, writeStorage } from '../utils/storage';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import './ScheduleGrid.css';
 
 interface ScheduleGridProps {
   events: ScheduleEvent[];
-  refreshing: boolean;
+  hasData: boolean;
+  loading: boolean;
+  fetchedAt: number | null;
   refreshError: string | null;
   onRefresh: () => void;
-  scheduleType?: string;
+  scheduleType: string;
   weekStart: Date;
   mobileView: MobileScheduleView;
   onMobileViewChange: (view: MobileScheduleView) => void;
   groupName: string;
-  groupPath?: string[];
+  groupPath: string[];
+  customLabel?: string;
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onGoToToday: () => void;
+  onChooseDate: (date: Date) => void;
   onToggleFavorite: () => void;
   isFavorite: boolean;
+  isMyPlan: boolean;
+  hasMyPlan: boolean;
+  onSetMyPlan: () => void;
+  onReturnToMyPlan: () => void;
+  onSearch: () => void;
+  initialScrollTop: number;
+  onScrollChange: (top: number) => void;
+}
+const DAY_SHORT = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
+const DAY_FULL = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
+type ViewMode = 'list' | 'grid';
+function savedMode(key: string, fallback: ViewMode): ViewMode { const value = readStorage(key, fallback); return value === 'grid' || value === 'list' ? value : fallback; }
+
+interface EventCardProps { event: ScheduleEvent; scheduleType: string; onOpen: (event: ScheduleEvent) => void; compact?: boolean; status?: string; style?: CSSProperties }
+function EventCard({ event, scheduleType, onOpen, compact = false, status, style }: EventCardProps) {
+  const type = eventType(event.type);
+  const notices = getEventNotices(event);
+  const title = event.subjectFullName || event.subject;
+  const place = eventPlace(event, scheduleType);
+  const PlaceIcon = scheduleType === '20' ? CalendarIcon : isRemoteEvent(event) ? WifiIcon : MapPinIcon;
+  return <button type="button" className={`event-card ${compact ? 'event-compact' : ''} ${status ? 'event-highlighted' : ''} ${event.kind === 'notice' ? 'event-standalone-notice' : ''}`}
+    style={{ '--event-color': type.color, ...style } as CSSProperties} onClick={() => onOpen(event)}
+    title={`${title} · ${type.label} · ${eventTime(event)} · ${place}`}
+    aria-label={`${title}, ${type.label}, ${eventTime(event)}, ${place}${status ? `, ${status}` : ''}`}>
+    <span className="event-card-top"><span className="event-type">{event.kind === 'notice' ? 'Informacja' : type.label}</span>{status && <span className="event-status">{status}</span>}</span>
+    <span className="event-subject">{title}</span>
+    <span className="event-info"><span className="event-time"><ClockIcon size={15} />{eventTime(event)}</span>
+    {(event.room || event.roomPlans?.length || event.kind !== 'notice') && <span className="event-place"><PlaceIcon size={17} />{place}</span>}</span>
+    {scheduleType !== '10' && event.teacher && <span className="event-teacher">{(event.teacherPlans?.length ?? 0) > 1 ? `${event.teacherPlans!.length} prowadzących · szczegóły po otwarciu` : event.teacherFullName || event.teacherPlans?.map(p => p.name).join(', ') || event.teacher}</span>}
+    {scheduleType === '10' && (event.groupPlans?.length || event.teacher) && <span className="event-teacher">{event.groupPlans?.map(p => p.name).join(', ') || event.teacher}</span>}
+    {notices.length > 0 && <span className="event-notice-badge"><InfoIcon size={14} />{getNoticeLabel(notices)}</span>}
+  </button>;
 }
 
-const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
-const DAY_ABBR = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
-const MIN_START_HOUR = 7;
-const MAX_END_HOUR = 21;
-
-/* ==================== Type-based color system ==================== */
-const TYPE_COLORS: Record<string, string> = {
-  'wyk': '#6366F1',
-  'wykład': '#6366F1',
-  'lecture': '#6366F1',
-  'w': '#6366F1',
-  'ćw': '#F59E0B',
-  'ćwiczenia': '#F59E0B',
-  'exercises': '#F59E0B',
-  'lab': '#10B981',
-  'laboratorium': '#10B981',
-  'laboratory': '#10B981',
-  'sem': '#EC4899',
-  'seminarium': '#EC4899',
-  'seminar': '#EC4899',
-  'lek': '#8B5CF6',
-  'lektorat': '#8B5CF6',
-  'proj': '#F97316',
-  'projekt': '#F97316',
-  'konw': '#06B6D4',
-  'konwersatorium': '#06B6D4',
-};
-
-function getTypeColor(type: string): string {
-  const normalized = type.toLowerCase().trim();
-  if (TYPE_COLORS[normalized]) return TYPE_COLORS[normalized];
-  for (const [key, color] of Object.entries(TYPE_COLORS)) {
-    if (normalized.includes(key) || key.includes(normalized)) return color;
-  }
-  return '#6366F1';
-}
-
-function formatWeekRange(start: Date, includeWeekend: boolean): string {
-  const end = new Date(start);
-  end.setDate(end.getDate() + (includeWeekend ? 6 : 4));
-  const startStr = start.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
-  const endStr = end.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
-  return `${startStr} – ${endStr}`;
-}
-
-function getDayIndex(date: Date): number {
-  const dayOfWeek = date.getDay();
-  return dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-}
-
-export default function ScheduleGrid({
-  events,
-  refreshing,
-  refreshError,
-  onRefresh,
-  scheduleType,
-  weekStart,
-  mobileView,
-  onMobileViewChange,
-  groupName,
-  groupPath,
-  onPrevWeek,
-  onNextWeek,
-  onGoToToday,
-  onToggleFavorite,
-  isFavorite
-}: ScheduleGridProps) {
-  const [showWeekend, setShowWeekend] = useState(false);
+export default function ScheduleGrid(props: ScheduleGridProps) {
+  const { events, hasData, loading, refreshError, fetchedAt, scheduleType, weekStart, mobileView, onMobileViewChange, onChooseDate } = props;
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const compactScreen = useMediaQuery('(max-width: 1024px)');
+  const [mobileMode, setMobileMode] = useState(() => savedMode('ubb-view-mobile:v1', 'list'));
+  const [desktopMode, setDesktopMode] = useState(() => savedMode('ubb-view-desktop:v1', 'grid'));
+  const mode = compactScreen ? mobileMode : desktopMode;
+  const [showWeekend, setShowWeekend] = useState(() => readStorage('ubb-show-weekend:v1', false));
   const [modalEvent, setModalEvent] = useState<ScheduleEvent | null>(null);
-  const [openingPlan, setOpeningPlan] = useState<string | null>(null);
-  const [timeIndicatorPos, setTimeIndicatorPos] = useState<number | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-
-  const today = useMemo(() => new Date(), []);
-
-  const weekDates = useMemo(() => {
-    return DAYS.map((_, i) => {
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + i);
-      return date;
-    });
-  }, [weekStart]);
-
-  // The UBB calendar export contains the entire semester, even with ?w=.
+  const [now, setNow] = useState(() => new Date());
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const restored = useRef(false);
+  const lastScrollKey = useRef('');
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const presentation = getPlanPresentation(props.groupName, props.groupPath, scheduleType);
+  const title = props.customLabel || presentation.title;
+  const titleParts = title.split(' · ');
+  const dates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekEvents = useMemo(() => events.filter(event => {
-    const date = new Date(event.start);
-    return weekDates.some(day => isSameDay(date, day));
-  }), [events, weekDates]);
+    const start = new Date(event.start), end = new Date(event.end);
+    return Number.isFinite(+start) && +end > +start && start >= weekStart && start < addDays(weekStart, 7);
+  }).sort((a, b) => +new Date(a.start) - +new Date(b.start)), [events, weekStart]);
+  const day = mobileView.weekStartTime === weekStart.getTime() ? mobileView.day : 0;
+  const selectedDate = dates[day];
+  const hasWeekendEvents = weekEvents.some(event => (new Date(event.start).getDay() + 6) % 7 >= 5);
+  const includeWeekend = showWeekend || hasWeekendEvents || day >= 5;
+  const visibleDates = dates.slice(0, includeWeekend ? 7 : 5);
+  const dayEvents = useMemo(() => weekEvents.filter(event => sameDay(new Date(event.start), selectedDate)), [weekEvents, selectedDate]);
+  const lessons = dayEvents.filter(event => event.kind !== 'notice');
+  const gaps = useMemo(() => agendaGaps(dayEvents), [dayEvents]);
+  const isToday = sameDay(selectedDate, now);
+  const hasCurrent = lessons.some(event => +new Date(event.start) <= +now && +new Date(event.end) > +now);
+  const nextStart = lessons.find(event => +new Date(event.start) > +now)?.start;
+  const nextDayEvent = weekEvents.find(event => event.kind !== 'notice' && new Date(event.start) >= addDays(selectedDate, 1));
+  const changedEvents = weekEvents.filter(event => getEventNotices(event).length > 0);
+  const singleDay = isMobile || mode === 'list';
 
-  const todayIndex = useMemo(() => {
-    return weekDates.findIndex(d => isSameDay(d, today));
-  }, [weekDates, today]);
-  const weekStartTime = weekStart.getTime();
-
-  const hasWeekendEvents = useMemo(() => {
-    return events.some(event => {
-      const eventDate = new Date(event.start);
-      const dayIndex = getDayIndex(eventDate);
-      return dayIndex >= 5 && weekDates[dayIndex] && isSameDay(eventDate, weekDates[dayIndex]);
-    });
-  }, [events, weekDates]);
-
-  // Mobile day view
-  const displayWeekend = showWeekend || hasWeekendEvents || todayIndex >= 5;
-  const displayDays = displayWeekend ? 7 : 5;
-  const defaultMobileViewDay = todayIndex >= 0 ? todayIndex : 0;
-  const selectedMobileViewDay = mobileView.weekStartTime === weekStartTime
-    ? mobileView.day
-    : defaultMobileViewDay;
-  const activeMobileViewDay = Math.min(selectedMobileViewDay, displayDays - 1);
-
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
-  }, []);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
-    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
-    touchStartRef.current = null;
-
-    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
-
-    if (dx < 0) {
-      if (activeMobileViewDay < displayDays - 1) {
-        onMobileViewChange({ weekStartTime, day: activeMobileViewDay + 1 });
-        return;
-      }
-      onNextWeek();
-    } else {
-      if (activeMobileViewDay > 0) {
-        onMobileViewChange({ weekStartTime, day: activeMobileViewDay - 1 });
-        return;
-      }
-      const prevWeek = new Date(weekStart);
-      prevWeek.setDate(prevWeek.getDate() - 7);
-      onMobileViewChange({ weekStartTime: prevWeek.getTime(), day: displayDays - 1 });
-      onPrevWeek();
-    }
-  }, [activeMobileViewDay, displayDays, onMobileViewChange, onNextWeek, onPrevWeek, weekStart, weekStartTime]);
-
-  // Compute dynamic hour range based on events
-  const { startHour, endHour, totalHours, hours } = useMemo(() => {
-    let earliest = MAX_END_HOUR;
-    let latest = MIN_START_HOUR;
-
-    weekEvents.forEach(event => {
-      const s = new Date(event.start);
-      const e = new Date(event.end);
-      const sh = s.getHours() + s.getMinutes() / 60;
-      const eh = e.getHours() + e.getMinutes() / 60;
-      if (sh < earliest) earliest = sh;
-      if (eh > latest) latest = eh;
-    });
-
-    if (earliest >= latest) {
-      const total = MAX_END_HOUR - MIN_START_HOUR - 1;
-      return {
-        startHour: MIN_START_HOUR + 1,
-        endHour: MAX_END_HOUR,
-        totalHours: total,
-        hours: Array.from({ length: total }, (_, i) => i + MIN_START_HOUR + 1),
-      };
-    }
-
-    const s = Math.max(MIN_START_HOUR, Math.floor(earliest) - 1);
-    const e = Math.min(MAX_END_HOUR, Math.ceil(latest));
-    const total = e - s;
-    return {
-      startHour: s,
-      endHour: e,
-      totalHours: total,
-      hours: Array.from({ length: total }, (_, i) => i + s),
-    };
-  }, [weekEvents]);
-
-  // Current time indicator
+  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(timer); }, []);
   useEffect(() => {
-    const updateTimeIndicator = () => {
-      if (todayIndex < 0) {
-        setTimeIndicatorPos(null);
-        return;
-      }
-      const now = new Date();
-      const h = now.getHours() + now.getMinutes() / 60;
-      if (h >= startHour && h <= endHour) {
-        setTimeIndicatorPos(((h - startHour) / totalHours) * 100);
-      } else {
-        setTimeIndicatorPos(null);
-      }
-    };
+    const tabs = tabsRef.current;
+    const selected = tabs?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
+    if (!tabs || !selected) return;
+    if (selected.offsetLeft < tabs.scrollLeft) tabs.scrollLeft = selected.offsetLeft;
+    else if (selected.offsetLeft + selected.offsetWidth > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = selected.offsetLeft + selected.offsetWidth - tabs.clientWidth;
+  }, [day, includeWeekend, singleDay]);
+  const scrollKey = `${dateKey(weekStart)}:${singleDay ? day : 'week'}:${mode}`;
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !hasData) return;
+    if (lastScrollKey.current === scrollKey) return;
+    container.scrollTop = restored.current ? 0 : props.initialScrollTop;
+    restored.current = true; lastScrollKey.current = scrollKey;
+  }, [hasData, scrollKey, props.initialScrollTop]);
 
-    updateTimeIndicator();
-    const interval = setInterval(updateTimeIndicator, 60000);
-    return () => clearInterval(interval);
-  }, [todayIndex, startHour, endHour, totalHours]);
+  function selectDay(index: number) { onMobileViewChange({ weekStartTime: weekStart.getTime(), day: index }); }
+  function chooseDate(value: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value === dateKey(selectedDate)) return;
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isFinite(+date)) onChooseDate(date);
+  }
+  function changeMode(next: ViewMode) {
+    if (compactScreen) setMobileMode(next); else setDesktopMode(next);
+    writeStorage(compactScreen ? 'ubb-view-mobile:v1' : 'ubb-view-desktop:v1', next);
+  }
+  function eventStatus(event: ScheduleEvent): string | undefined {
+    if (event.kind === 'notice') return;
+    if (+new Date(event.start) <= +now && +new Date(event.end) > +now) return 'Trwa teraz';
+    if (isToday && !hasCurrent && event.start === nextStart) return 'Najbliższe zajęcia';
+    if (selectedDate > now && event === lessons[0]) return 'Pierwsze zajęcia';
+  }
+  const first = lessons[0];
+  const lastEnd = lessons.length ? new Date(Math.max(...lessons.map(event => +new Date(event.end)))) : null;
+  const startHours = weekEvents.map(event => new Date(event.start).getHours() + new Date(event.start).getMinutes() / 60);
+  const endHours = weekEvents.map(event => sameDay(new Date(event.start), new Date(event.end)) ? new Date(event.end).getHours() + new Date(event.end).getMinutes() / 60 : 24);
+  const startHour = Math.max(0, Math.floor(startHours.length ? Math.min(...startHours) : 8) - 1);
+  const endHour = Math.min(24, Math.ceil(endHours.length ? Math.max(...endHours) : 20));
+  const hourHeight = 80;
+  const hourCount = Math.max(1, endHour - startHour);
+  const gridHeight = hourCount * hourHeight;
+  const fitWeek = !isMobile && mode === 'grid';
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  const datesLabel = `${weekStart.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${visibleDates.at(-1)!.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const dayLabel = selectedDate.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const shouldScrollToTimeIndicator = events.length > 0 && timeIndicatorPos !== null;
+  const emptyDay = <div className="empty-plan"><CalendarIcon size={32} /><h3>Brak zajęć w {refreshError ? 'pobranym ' : ''}planie</h3><p>{!singleDay && !weekEvents.length ? datesLabel : dayLabel}</p><p className="empty-help">{refreshError ? 'Nie udało się ponownie sprawdzić danych. Spróbuj odświeżyć plan.' : 'Sprawdź kolejny termin lub wybierz inną datę.'}</p>
+    <button type="button" className="primary-button" onClick={() => nextDayEvent ? onChooseDate(new Date(nextDayEvent.start)) : props.onNextWeek()}>{nextDayEvent ? 'Następny dzień z zajęciami' : 'Sprawdź kolejny tydzień'}</button></div>;
 
-  // Scroll to current time on mount
-  useEffect(() => {
-    if (timeIndicatorPos !== null && gridRef.current) {
-      const container = gridRef.current;
-      const totalHeight = container.scrollHeight;
-      const scrollTarget = (timeIndicatorPos / 100) * totalHeight - container.clientHeight / 3;
-      container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
-    }
-  }, [shouldScrollToTimeIndicator, timeIndicatorPos]);
+  const changes = hasData && changedEvents.length > 0 ? <section className="plan-changes"><h2><InfoIcon size={18} />Informacje do zajęć w tym tygodniu</h2>{changedEvents.map((event, index) => <button type="button" key={index} onClick={() => setModalEvent(event)}><strong>{getNoticeLabel(getEventNotices(event))}</strong><span>{event.subjectFullName || event.subject} · {new Date(event.start).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}</span><ChevronRightIcon size={17} /></button>)}</section> : null;
 
-  // Check if an event is happening now
-  const isEventNow = useCallback((event: ScheduleEvent): boolean => {
-    const now = new Date();
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    return now >= start && now <= end;
-  }, []);
-
-  /* Logic for grouping overlapping events */
-  const eventsByDay = useMemo(() => {
-    const map: Map<number, (ScheduleEvent & { style: React.CSSProperties; durationHours: number })[]> = new Map();
-
-    const rawEventsByDay: Map<number, ScheduleEvent[]> = new Map();
-    weekEvents.forEach(event => {
-      const eventDate = new Date(event.start);
-      const dayIndex = getDayIndex(eventDate);
-
-      if (!rawEventsByDay.has(dayIndex)) {
-        rawEventsByDay.set(dayIndex, []);
-      }
-      rawEventsByDay.get(dayIndex)!.push(event);
-    });
-
-    rawEventsByDay.forEach((dayEvents, dayIndex) => {
-      const sorted = [...dayEvents].sort((a, b) =>
-        new Date(a.start).getTime() - new Date(b.start).getTime()
-      );
-
-      const clusters: ScheduleEvent[][] = [];
-      let currentCluster: ScheduleEvent[] = [];
-      let clusterEnd = 0;
-
-      sorted.forEach(ev => {
-        const start = new Date(ev.start).getTime();
-        const end = new Date(ev.end).getTime();
-
-        if (currentCluster.length === 0) {
-          currentCluster.push(ev);
-          clusterEnd = end;
-        } else {
-          if (start < clusterEnd) {
-            currentCluster.push(ev);
-            clusterEnd = Math.max(clusterEnd, end);
-          } else {
-            clusters.push(currentCluster);
-            currentCluster = [ev];
-            clusterEnd = end;
-          }
-        }
-      });
-      if (currentCluster.length > 0) clusters.push(currentCluster);
-
-      const processedEvents: (ScheduleEvent & { style: React.CSSProperties; durationHours: number })[] = [];
-
-      clusters.forEach(cluster => {
-        const columns: ScheduleEvent[][] = [];
-        const eventCols: Map<ScheduleEvent, number> = new Map();
-
-        cluster.forEach(ev => {
-          const start = new Date(ev.start).getTime();
-          let colIndex = columns.findIndex(col => {
-            const lastEvent = col[col.length - 1];
-            return new Date(lastEvent.end).getTime() <= start;
-          });
-
-          if (colIndex === -1) {
-            colIndex = columns.length;
-            columns.push([]);
-          }
-
-          columns[colIndex].push(ev);
-          eventCols.set(ev, colIndex);
-        });
-
-        const totalCols = columns.length;
-
-        cluster.forEach(ev => {
-          const col = eventCols.get(ev) || 0;
-          const start = new Date(ev.start);
-          const end = new Date(ev.end);
-          const evStartHour = start.getHours() + start.getMinutes() / 60;
-          const evEndHour = end.getHours() + end.getMinutes() / 60;
-
-          const top = ((evStartHour - startHour) / totalHours) * 100;
-          const height = ((evEndHour - evStartHour) / totalHours) * 100;
-          const leftPct = (col / totalCols) * 100;
-          const widthPct = 100 / totalCols;
-
-          const style = {
-            top: `${top}%`,
-            height: `calc(${height}% - 2px)`,
-            left: `calc(${leftPct}% + 2px)`,
-            width: `calc(${widthPct}% - 4px)`,
-            zIndex: 1,
-            '--event-color': getTypeColor(ev.type),
-            animationDelay: `${(processedEvents.length % 8) * 30}ms`,
-          } as React.CSSProperties;
-
-          processedEvents.push({ ...ev, style, durationHours: evEndHour - evStartHour });
-        });
-      });
-
-      map.set(dayIndex, processedEvents);
-    });
-
-    return map;
-  }, [weekEvents, startHour, totalHours]);
-
-  const formatEventTime = (event: ScheduleEvent) => {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const format = (d: Date) =>
-      `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-    return `${format(start)}–${format(end)}`;
-  };
-
-  const breadcrumb = groupPath && groupPath.length > 1
-    ? groupPath.slice(0, -1).join(' \u203A ')
-    : null;
-  const canOpenRoomPlan = scheduleType !== '20';
-  const isRoomSchedule = scheduleType === '20';
-
-  const openPlan = useCallback((plan: SchedulePlanLink, pathRoot: string) => {
-    saveGroupMeta(plan.id, {
-      name: plan.name,
-      path: [pathRoot, plan.name],
-      type: plan.scheduleType,
-    });
-    navigate(`/plan/${plan.scheduleType}/${plan.id}`);
-  }, [navigate]);
-
-  const openPlanFromSearch = useCallback(async (
-    query: string,
-    type: 'room' | 'group',
-    pathRoot: string,
-  ) => {
-    const name = query.trim();
-    if (!name) return;
-
-    setOpeningPlan(name);
-    try {
-      const results = await searchPlans(name, type);
-      const normalizedName = name.toLowerCase();
-      const plan = results.find(result => result.name.toLowerCase() === normalizedName) ?? results[0];
-
-      if (!plan) return;
-
-      openPlan(plan, pathRoot);
-    } catch (err) {
-      console.error(`Failed to open ${type} plan:`, err);
-    } finally {
-      setOpeningPlan(null);
-    }
-  }, [openPlan]);
-
-  const openRoomPlan = useCallback(async (room: string) => {
-    await openPlanFromSearch(room, 'room', 'Sale');
-  }, [openPlanFromSearch]);
-
-  const openGroupPlan = useCallback(async (group: string) => {
-    await openPlanFromSearch(group, 'group', 'Grupy');
-  }, [openPlanFromSearch]);
-
-  // Check if event description mentions remote learning
-  const isRemote = (event: ScheduleEvent) => {
-    const desc = (event.description || '').toLowerCase();
-    const loc = (event.location || '').toLowerCase();
-    return desc.includes('zdaln') || loc.includes('zdaln') || !event.room;
-  };
-
-  return (
-    <div className="schedule-grid">
-      <div className="schedule-header">
-        <div className="schedule-info">
-          <div>
-            <h2>{groupName}</h2>
-            {breadcrumb && <div className="breadcrumb">{breadcrumb}</div>}
-          </div>
-          <button
-            className={`favorite-btn ${isFavorite ? 'is-favorite' : ''}`}
-            onClick={onToggleFavorite}
-            aria-label={isFavorite ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
-          >
-            {isFavorite ? <StarIcon size={18} /> : <StarOutlineIcon size={18} />}
-          </button>
-        </div>
-        <div className="schedule-controls">
-          <button className="weekend-toggle" onClick={onRefresh} disabled={refreshing}>
-            Odśwież
-          </button>
-          <button
-            className="weekend-toggle"
-            onClick={() => {
-              if (!hasWeekendEvents) {
-                setShowWeekend(w => !w);
-              }
-            }}
-            aria-label={displayWeekend ? 'Ukryj weekend' : 'Pokaż weekend'}
-          >
-            {displayWeekend ? 'Pn–Nd' : 'Pn–Pt'}
-          </button>
-          <div className="week-navigation">
-            <button onClick={onPrevWeek} className="nav-btn" aria-label="Poprzedni tydzień">
-              <ChevronLeftIcon size={16} />
-            </button>
-            <button onClick={onGoToToday} className="today-btn">
-              Dziś
-            </button>
-            <span className="week-label">{formatWeekRange(weekStart, displayWeekend)}</span>
-            <button onClick={onNextWeek} className="nav-btn" aria-label="Następny tydzień">
-              <ChevronRightIcon size={16} />
-            </button>
-          </div>
-        </div>
+  return <div className={`schedule-page ${fitWeek ? 'fit-week' : ''}`}>
+    <section className="plan-heading">
+      {props.hasMyPlan && !props.isMyPlan && <button type="button" className="back-to-plan text-button" onClick={props.onReturnToMyPlan}><ChevronLeftIcon size={16} />Wróć do mojego planu</button>}
+      <div className="plan-title-row"><div className="plan-title-copy"><h1>{titleParts.length === 2 && /^grupa \d+$/.test(titleParts[1]) ? <>{titleParts[0]}<span className="plan-title-group"> · {titleParts[1]}</span></> : title}</h1><p>{presentation.subtitle}</p></div>
+        <div className="plan-title-actions"><button type="button" className={`favorite-button ${props.isFavorite ? 'is-favorite' : ''}`} aria-pressed={props.isFavorite} aria-label={props.isFavorite ? 'Usuń z zapisanych' : 'Zapisz plan'} onClick={props.onToggleFavorite}>
+          {props.isFavorite ? <StarIcon size={20} /> : <StarOutlineIcon size={20} />}<span>{props.isFavorite ? 'Zapisany' : 'Zapisz'}</span></button>
+          <details className="mobile-plan-options" data-shortcuts-blocked><summary className="icon-button" aria-label="Opcje planu"><InfoIcon size={21} /></summary><div className="plan-options-panel">
+            <button type="button" className="text-button" onClick={props.onSearch}><SearchIcon size={17} />Zmień plan</button>
+            <button type="button" className="text-button" aria-pressed={props.isMyPlan} onClick={props.onSetMyPlan}><CalendarIcon size={17} />{props.isMyPlan ? 'Usuń ustawienie mojego planu' : 'Ustaw jako mój plan'}</button>
+            <strong>{props.groupName}</strong><p>{props.groupPath.join(' › ')}</p>
+            {props.isMyPlan && <p>Ten plan otwiera się na stronie głównej.</p>}
+          </div></details></div>
       </div>
-
-      {refreshError && (
-        <div className="schedule-refresh-error" role="alert">
-          {refreshError} Wyświetlamy ostatnio pobrany plan.
-        </div>
-      )}
-
-      {/* Mobile day tabs — horizontal chip bar */}
-      <div className="mobile-day-tabs" role="tablist">
-        {Array.from({ length: displayDays }, (_, i) => i).map(i => (
-          <button
-            key={i}
-            role="tab"
-            aria-selected={activeMobileViewDay === i}
-            className={`mobile-day-tab ${activeMobileViewDay === i ? 'active' : ''} ${todayIndex === i ? 'is-today' : ''}`}
-            onClick={() => onMobileViewChange({ weekStartTime, day: i })}
-          >
-            <span className="mobile-day-abbr">{DAY_ABBR[i]}</span>
-            <span className="mobile-day-date">{weekDates[i].getDate()}</span>
-          </button>
-        ))}
+      <div className="plan-heading-actions"><button type="button" className="text-button" onClick={props.onSearch}><SearchIcon size={16} />Zmień plan</button>
+        <button type="button" className={`my-plan-button ${props.isMyPlan ? 'is-my-plan' : ''}`} aria-pressed={props.isMyPlan} onClick={props.onSetMyPlan}><CalendarIcon size={16} />{props.isMyPlan ? 'To mój plan' : 'Ustaw jako mój plan'}</button>
       </div>
+    </section>
 
-      <div className="grid-container" ref={gridRef} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <div className="time-column">
-          <div className="time-header"></div>
-          {hours.map(hour => (
-            <div key={hour} className="time-slot">
-              {hour}:00
-            </div>
-          ))}
+    <div className="schedule-toolbar"><div className="date-controls" data-shortcuts-blocked>
+      <button type="button" className="icon-button" onClick={props.onPrevWeek} aria-label="Poprzedni tydzień"><ChevronLeftIcon size={20} /></button>
+      <label className="date-picker"><span className="sr-only">Wybierz datę</span><input type="date" aria-label="Wybierz datę" value={dateKey(selectedDate)} onInput={e => chooseDate(e.currentTarget.value)} onChange={e => chooseDate(e.target.value)} /></label>
+      <button type="button" className="icon-button" onClick={props.onNextWeek} aria-label="Następny tydzień"><ChevronRightIcon size={20} /></button>
+      <button type="button" className="today-button" onClick={props.onGoToToday}>Dziś</button>
+    </div><div className="view-controls"><div className="view-switch" role="group" aria-label="Widok planu"><button type="button" aria-pressed={mode === 'list'} onClick={() => changeMode('list')}>Lista</button><button type="button" aria-pressed={mode === 'grid'} onClick={() => changeMode('grid')}>Siatka</button></div>
+      {hasWeekendEvents ? <span className="weekend-required">Weekend w planie</span> : <label className="weekend-option"><input type="checkbox" checked={includeWeekend} onChange={e => { setShowWeekend(e.target.checked); writeStorage('ubb-show-weekend:v1', e.target.checked); if (!e.target.checked && day >= 5) selectDay(0); }} />Weekend</label>}
+    </div></div>
+
+    <div className="data-status"><span role="status" aria-live="polite">{loading ? hasData ? 'Odświeżanie planu…' : 'Wczytywanie planu…' : fetchedAt ? `Pobrano z UBB ${new Date(fetchedAt).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} o ${formatTime(new Date(fetchedAt))}` : 'Plan nie został pobrany'}</span>
+      <button type="button" className="text-button" onClick={props.onRefresh} disabled={loading}>Odśwież</button></div>
+    {refreshError && <div className="schedule-error" role="alert"><InfoIcon size={18} /><span>{refreshError}{hasData ? ' Wyświetlamy poprzednio pobrany plan.' : ''}</span><button type="button" className="text-button" disabled={loading} onClick={props.onRefresh}>Spróbuj ponownie</button></div>}
+
+    {singleDay && <div className="day-tabs" ref={tabsRef} role="tablist" aria-label="Dzień tygodnia" data-shortcuts-blocked>{visibleDates.map((date, index) => <button type="button" key={dateKey(date)} role="tab" id={`day-tab-${index}`} aria-controls="day-panel"
+      aria-selected={day === index} tabIndex={day === index ? 0 : -1} className={`${day === index ? 'active' : ''} ${sameDay(date, now) ? 'is-today' : ''}`} onClick={() => selectDay(index)}
+      aria-label={`${DAY_FULL[index]}, ${date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}${sameDay(date, now) ? ', dzisiaj' : ''}`}
+      onKeyDown={e => { let next = index; if (e.key === 'ArrowRight') next = (index + 1) % visibleDates.length; else if (e.key === 'ArrowLeft') next = (index + visibleDates.length - 1) % visibleDates.length; else if (e.key === 'Home') next = 0; else if (e.key === 'End') next = visibleDates.length - 1; else return; e.preventDefault(); e.stopPropagation(); selectDay(next); e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus(); }}>
+      <span>{DAY_SHORT[index]}</span><strong>{date.getDate()}</strong>{weekEvents.some(event => event.kind !== 'notice' && sameDay(new Date(event.start), date)) && <span className="day-has-events" aria-hidden="true" />}
+    </button>)}</div>}
+
+    <div className={`schedule-scroll ${mode === 'list' ? 'agenda-scroll' : 'grid-scroll'}`} ref={scrollRef}
+      id={singleDay ? 'day-panel' : undefined} role={singleDay ? 'tabpanel' : undefined} aria-labelledby={singleDay ? `day-tab-${day}` : undefined}
+      onScroll={e => { if (hasData && lastScrollKey.current === scrollKey) props.onScrollChange(e.currentTarget.scrollTop); }}
+      onTouchStart={e => { if (mode === 'grid') touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+      onTouchEnd={e => {
+        const start = touchStart.current; touchStart.current = null;
+        if (!start || !isMobile || mode !== 'grid') return;
+        const dx = e.changedTouches[0].clientX - start.x, dy = e.changedTouches[0].clientY - start.y;
+        if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        if (dx < 0) { if (day < visibleDates.length - 1) selectDay(day + 1); else props.onNextWeek(); }
+        else if (day > 0) selectDay(day - 1); else onChooseDate(addDays(weekStart, includeWeekend ? -1 : -3));
+      }}>
+      {loading && !hasData ? <ScheduleLoader />
+        : !hasData ? <div className="empty-plan"><InfoIcon size={32} /><h3>Nie udało się wyświetlić planu</h3><p>Wybierz „Spróbuj ponownie”, aby pobrać dane.</p></div>
+        : mode === 'list' ? <div className="agenda"><div className="agenda-heading"><div><h2>{isToday ? 'Dzisiaj' : DAY_FULL[day]}</h2><p>{selectedDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+          {first && lastEnd && <div className="day-summary"><strong>{lessons.length} {lessons.length === 1 ? 'zajęcie' : lessons.length < 5 ? 'zajęcia' : 'zajęć'} w planie</strong><span>{formatTime(first.start)}–{formatTime(lastEnd)}</span></div>}</div>
+          {isToday && lastEnd && +lastEnd <= +now && <p className="day-finished">Na dziś koniec zajęć w tym planie.</p>}
+          {dayEvents.length ? <div className="agenda-events">{dayEvents.map((event, index) => <div key={`${event.start}:${event.subject}:${index}`}>
+            {gaps.has(event) && <p className="agenda-break">Przerwa {gaps.get(event)} min</p>}
+            <EventCard event={event} scheduleType={scheduleType} onOpen={setModalEvent} status={eventStatus(event)} />
+          </div>)}</div> : emptyDay}
         </div>
-
-        {Array.from({ length: displayDays }, (_, i) => i).map(dayIndex => (
-          <div
-            key={DAYS[dayIndex]}
-            className={`day-column ${todayIndex === dayIndex ? 'today' : ''} ${dayIndex === activeMobileViewDay ? 'mobile-active' : ''}`}
-          >
-            <div className="day-header">
-              <span className="day-name">{DAYS[dayIndex].slice(0, 3)}</span>
-              <span className="day-date">{weekDates[dayIndex].getDate()}</span>
-            </div>
-            <div className="day-events" style={{ height: `calc(${totalHours} * 60px)` }}>
-              {todayIndex === dayIndex && timeIndicatorPos !== null && (
-                <div
-                  className="time-indicator"
-                  style={{ top: `${timeIndicatorPos}%` }}
-                >
-                  <div className="time-indicator-dot" />
-                  <div className="time-indicator-line" />
-                </div>
-              )}
-              {eventsByDay.get(dayIndex)?.map((event, i) => {
-                const notices = getEventNotices(event);
-                const noticeLabel = getNoticeLabel(notices);
-                const roomPlans = isRoomSchedule ? event.groupPlans : event.roomPlans;
-                return (
-                <div
-                  key={i}
-                  className={`event-block ${event.durationHours <= 1.25 ? 'event-compact' : ''} ${isEventNow(event) ? 'event-now' : ''} ${notices.length > 0 ? 'event-with-notice' : ''} ${event.kind === 'notice' ? 'event-standalone-notice' : ''}`}
-                  style={event.style}
-                  title={`${event.subjectFullName || event.subject}${event.type ? ` (${event.type})` : ''}\n${event.teacherFullName || event.teacher}\n${event.room || ''}\n${formatEventTime(event)}${notices.length > 0 ? `\n\n${notices.map(formatNotice).join('\n\n')}` : ''}`}
-                  onClick={() => setModalEvent(event)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setModalEvent(event); } }}
-                >
-                  <span className="event-subject">{event.subjectFullName || event.subject}</span>
-                  {(event.type || notices.length > 0) && (
-                    <div className="event-badges">
-                      {event.type && <span className="event-type">{event.type}</span>}
-                      {notices.length > 0 && (
-                        <span className="event-notice-badge" aria-label={`${noticeLabel}. ${notices.map(formatNotice).join('. ')}`}>
-                          <InfoIcon size={12} />
-                          <span>{noticeLabel}</span>
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div className="event-meta">
-                    <span className="event-time">
-                      <ClockIcon size={10} />
-                      {formatEventTime(event)}
-                    </span>
-                    {roomPlans?.length ? roomPlans.map(plan => (
-                      <button
-                        key={`${plan.scheduleType}:${plan.id}`}
-                        type="button"
-                        className="event-room event-room-link"
-                        aria-label={`Pokaż plan ${isRoomSchedule ? 'grupy' : 'sali'} ${plan.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPlan(plan, isRoomSchedule ? 'Grupy' : 'Sale');
-                        }}
-                      >
-                        {isRoomSchedule ? <CalendarIcon size={10} /> : <MapPinIcon size={10} />}
-                        {plan.name}
-                      </button>
-                    )) : event.room && canOpenRoomPlan ? (
-                      <button
-                        type="button"
-                        className="event-room event-room-link"
-                        disabled={openingPlan === event.room}
-                        aria-label={`Pokaż plan sali ${event.room}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openRoomPlan(event.room);
-                        }}
-                      >
-                        <MapPinIcon size={10} />
-                        {event.room}
-                      </button>
-                    ) : event.room && isRoomSchedule ? (
-                      <button
-                        type="button"
-                        className="event-room event-room-link"
-                        disabled={openingPlan === event.room}
-                        aria-label={`Pokaż plan grupy ${event.room}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openGroupPlan(event.room);
-                        }}
-                      >
-                        <CalendarIcon size={10} />
-                        {event.room}
-                      </button>
-                    ) : event.room ? (
-                      <span className="event-room">
-                        <MapPinIcon size={10} />
-                        {event.room}
-                      </span>
-                    ) : event.kind !== 'notice' && isRemote(event) ? (
-                      <span className="event-note">
-                        <WifiIcon size={10} />
-                        zdalnie
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {modalEvent && (
-        <EventModal
-          event={modalEvent}
-          scheduleType={scheduleType}
-          onClose={() => setModalEvent(null)}
-        />
-      )}
+        : !weekEvents.length || (isMobile && !dayEvents.length) ? emptyDay
+        : <div className="week-grid" style={{ '--day-count': singleDay ? 1 : visibleDates.length, '--hour-count': hourCount } as CSSProperties}>
+          <div className="grid-time-column"><div className="grid-corner" aria-hidden="true" />{Array.from({ length: endHour - startHour }, (_, i) => <div className="grid-time" key={i} style={fitWeek ? undefined : { height: hourHeight }}>{startHour + i}:00</div>)}</div>
+          {(isMobile ? [selectedDate] : visibleDates).map(date => {
+            const dayIndex = (date.getDay() + 6) % 7;
+            const entries = positionEvents(weekEvents.filter(event => sameDay(new Date(event.start), date)));
+            return <section key={dateKey(date)} className={`grid-day ${sameDay(date, now) ? 'today' : ''}`} aria-label={`${DAY_FULL[dayIndex]} ${date.toLocaleDateString('pl-PL')}`}>
+              <div className="grid-day-heading"><span>{DAY_FULL[dayIndex]}</span><strong>{date.getDate()}</strong></div>
+              <div className="grid-day-events" style={fitWeek ? undefined : { height: gridHeight }}>
+                {sameDay(date, now) && nowHour >= startHour && nowHour < endHour && <div className="time-indicator" style={{ top: fitWeek ? `${(nowHour - startHour) / hourCount * 100}%` : (nowHour - startHour) * hourHeight }}><span>{formatTime(now)}</span></div>}
+                {!entries.length && <p className="grid-empty-day">Brak zajęć</p>}
+                {entries.map(({ event, column, columns }, index) => {
+                  const start = new Date(event.start), end = new Date(event.end);
+                  const from = start.getHours() + start.getMinutes() / 60;
+                  const duration = Math.min((+end - +start) / 3600000, 24 - from);
+                  return <EventCard key={`${event.start}:${event.subject}:${index}`} event={event} scheduleType={scheduleType} onOpen={setModalEvent} compact={duration <= 1}
+                    style={{ position: 'absolute', top: fitWeek ? `${(from - startHour) / hourCount * 100}%` : (from - startHour) * hourHeight, height: fitWeek ? `calc(${duration / hourCount * 100}% - 3px)` : Math.max(32, duration * hourHeight - 4), left: `calc(${column / columns * 100}% + 3px)`, width: `calc(${100 / columns}% - 6px)` }} />;
+                })}
+              </div>
+            </section>;
+          })}
+        </div>}
+      {!fitWeek && changes}
     </div>
-  );
+    {fitWeek && changes && <details className="week-notices"><summary><InfoIcon size={15} />Informacje do zajęć ({changedEvents.length})</summary>{changes}</details>}
+    {!singleDay && <div className="week-caption">{datesLabel}<span>Strzałki: zmiana tygodnia · T: dzisiaj</span></div>}
+    {modalEvent && <EventModal event={modalEvent} scheduleType={scheduleType} onClose={() => setModalEvent(null)} />}
+  </div>;
 }

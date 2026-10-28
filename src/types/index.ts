@@ -50,4 +50,5 @@ export interface FavoriteGroup {
   name: string;
   path: string[];
   scheduleType: string;
+  label?: string;
 }

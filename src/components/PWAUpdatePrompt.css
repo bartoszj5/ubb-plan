@@ -2,7 +2,7 @@
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 10000;
+  z-index: 200;
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -40,6 +40,7 @@
 }
 
 .pwa-toast-btn {
+  min-height: 44px;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
   font-size: 0.8rem;
@@ -52,7 +53,7 @@
 
 .pwa-toast-btn-reload {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-foreground);
 }
 
 .pwa-toast-btn-reload:hover {
@@ -72,7 +73,7 @@
   .pwa-toast {
     left: 12px;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
     max-width: none;
   }
 }

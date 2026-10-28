@@ -1,0 +1,93 @@
+.schedule-loader {
+  min-height: 320px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.schedule-loader-calendar {
+  position: relative;
+  width: 182px;
+  padding: 18px 12px 12px;
+  margin-bottom: 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+  transform: rotate(-4deg);
+  animation: schedule-calendar-float 3.6s ease-in-out infinite;
+}
+
+.schedule-loader-binding {
+  position: absolute;
+  inset: -7px 32px auto;
+  display: flex;
+  justify-content: space-between;
+}
+
+.schedule-loader-binding i {
+  width: 5px;
+  height: 17px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.schedule-loader-heading {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  justify-items: center;
+  padding-bottom: 12px;
+}
+
+.schedule-loader-heading span {
+  width: 12px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--text-tertiary);
+  opacity: .5;
+}
+
+.schedule-loader-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(4, 23px);
+  gap: 4px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 7px;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent calc(20% - 1px), var(--border-color) calc(20% - 1px), var(--border-color) 20%);
+}
+
+.schedule-loader-lesson {
+  border-radius: 4px;
+  background: var(--accent);
+  animation: schedule-lesson-arrive 3.6s ease-in-out infinite both;
+}
+
+.lesson-one { grid-area: 1 / 1 / 3 / 2; }
+.lesson-two { grid-area: 2 / 2 / 4 / 3; animation-delay: .15s; background: var(--accent-gold); }
+.lesson-three { grid-area: 1 / 3 / 2 / 4; animation-delay: .3s; }
+.lesson-four { grid-area: 3 / 3 / 5 / 4; animation-delay: .45s; background: var(--text-secondary); }
+.lesson-five { grid-area: 2 / 4 / 4 / 5; animation-delay: .6s; }
+.lesson-six { grid-area: 1 / 5 / 3 / 6; animation-delay: .75s; background: var(--accent-gold); }
+
+.schedule-loader-title { color: var(--text-primary); font-size: 16px; font-weight: 600; }
+.schedule-loader-caption { margin-top: 7px; color: var(--text-secondary); font-size: 13px; }
+
+@keyframes schedule-lesson-arrive {
+  0%, 8%, 100% { opacity: 0; transform: translateY(-10px) scale(.85); }
+  24%, 78% { opacity: .85; transform: translateY(0) scale(1); }
+  92% { opacity: 0; transform: translateY(4px) scale(.95); }
+}
+
+@keyframes schedule-calendar-float {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-loader-calendar, .schedule-loader-lesson { animation: none; }
+  .schedule-loader-lesson { opacity: .85; }
+}

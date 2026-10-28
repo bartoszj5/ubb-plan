@@ -1,142 +1,20 @@
-.favorites-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 16px;
-  color: var(--text-tertiary);
-  text-align: center;
-}
+.favorites-list { list-style: none; margin: 0; padding: 0; }
+.favorite-item { margin-bottom: 4px; }
+.favorite-main { display: flex; align-items: center; gap: 2px; }
+.favorite-main .saved-plan { flex: 1; min-width: 0; }
+.favorite-main .saved-plan strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rename-form { padding: 10px; }
+.rename-form label { font-size: 13px; color: var(--text-secondary); }
+.rename-form input { display: block; width: 100%; font-size: 16px; min-height: 44px; margin-top: 8px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text-primary); padding: 8px; }
+.rename-form > div { display: flex; justify-content: space-between; margin-top: 4px; }
+.rename-form button { font-size: 13px; }
+.favorites-empty { display: flex; align-items: flex-start; gap: 10px; padding: 4px 8px; color: var(--text-secondary); }
+.favorites-empty svg { flex-shrink: 0; margin-top: 1px; color: var(--accent-gold); }
+.favorites-empty p { font-size: 13px; line-height: 1.6; }
 
-.favorites-icon {
-  margin-bottom: 8px;
-  opacity: 0.4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.favorites-empty p {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.favorites-empty small {
-  font-size: 11px;
-  opacity: 0.6;
-  line-height: 1.4;
-}
-
-.favorites-list {
-  padding: 10px 10px;
-}
-
-.favorites-list h3 {
-  margin: 0 4px 8px;
-  font-family: 'Inter', sans-serif;
-  font-size: 10px;
-  color: var(--text-tertiary);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.favorites-list h3 svg {
-  color: var(--accent-gold);
-}
-
-.favorite-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  margin-bottom: 3px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
-}
-
-.favorite-item:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-color);
-}
-
-.favorite-info {
-  flex: 1;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.favorite-info:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-.favorite-name {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.favorite-path {
-  display: block;
-  font-size: 10px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 1px;
-}
-
-.remove-btn {
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 4px 6px;
-  opacity: 0;
-  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
-  border-radius: var(--radius-sm);
-  line-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.favorite-item:hover .remove-btn {
-  opacity: 0.5;
-}
-
-.remove-btn:hover {
-  opacity: 1 !important;
-  color: #EF4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.remove-btn:focus-visible {
-  opacity: 1;
-}
-
-@media (max-width: 768px) {
-  .favorite-item {
-    padding: 10px 12px;
-    min-height: 44px;
-  }
-
-  .remove-btn {
-    opacity: 0.5;
-    min-width: 44px;
-    min-height: 44px;
-  }
-}
+.plan-actions-button { width: 32px; min-width: 32px; height: 36px; flex-shrink: 0; }
+.own-plan-marker { display: inline-block; margin-right: 5px; padding: 1px 5px; border-radius: 4px; font-size: 10px; line-height: 1.5; color: var(--accent); background: var(--accent-alpha); font-weight: 500; vertical-align: 1px; }
+.favorite-actions { display: flex; flex-direction: column; padding: 4px; margin: 2px 0 8px; border: 1px solid var(--border-color); background: var(--bg-elevated); border-radius: 8px; }
+.favorite-actions button { min-height: 36px; border: 0; border-radius: 5px; padding: 8px; background: transparent; color: var(--text-secondary); text-align: left; font-size: 12px; }
+.favorite-actions button:hover { background: var(--bg-hover); color: var(--text-primary); }
+@media (max-width: 768px), (pointer: coarse) { .plan-actions-button { width: 44px; min-width: 44px; height: 44px; } .favorite-actions button { min-height: 44px; } }

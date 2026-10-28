@@ -18,23 +18,28 @@ export default function Notices() {
   return (
     <div className="notices-section">
       <h3>
-        <InfoIcon size={13} /> Uwagi
+        <InfoIcon size={16} /> Informacje UBB
       </h3>
       <div className="notices-list">
         {notices.map((notice, i) => {
           const isExpanded = expandedIndex === i;
           return (
+            <div key={i}>
             <button
+              type="button"
               key={i}
               className={`notice-item ${isExpanded ? 'expanded' : ''}`}
               onClick={() => setExpandedIndex(isExpanded ? null : i)}
+              aria-expanded={isExpanded}
+              aria-controls={`ubb-notice-${i}`}
             >
               <div className="notice-header">
                 <ChevronRightIcon size={12} className="notice-chevron" />
                 <span className="notice-title">{notice.title}</span>
               </div>
+            </button>
               {isExpanded && (
-                <div className="notice-body">
+                <div className="notice-body" id={`ubb-notice-${i}`}>
                   {notice.description && (
                     <p className="notice-desc">{notice.description}</p>
                   )}
@@ -45,7 +50,7 @@ export default function Notices() {
                   </ul>
                 </div>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

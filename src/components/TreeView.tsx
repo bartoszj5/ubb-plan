@@ -1,320 +1,52 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TreeNode } from '../types';
-import { fetchFaculties, fetchTreeBranch, fetchTreeIndex, searchPlans } from '../utils/api';
-import { BuildingIcon, FolderIcon, CalendarIcon, ChevronRightIcon, LoaderIcon, SearchIcon, XIcon, MapPinIcon } from './Icons';
+import { fetchFaculties, fetchTreeBranch } from '../utils/api';
+import { BuildingIcon, CalendarIcon, ChevronLeftIcon, ChevronRightIcon, FolderIcon } from './Icons';
 import './TreeView.css';
 
 interface TreeViewProps {
   onSelectSchedule: (type: string, id: string, name: string, path: string[]) => void;
 }
-
-interface TreeNodeState extends TreeNode {
-  children?: TreeNodeState[];
-  isExpanded?: boolean;
-  isLoading?: boolean;
-}
-
-interface SearchResult {
-  id: string;
-  name: string;
-  type: 'faculty' | 'branch' | 'schedule';
-  scheduleType: string | null;
-  hasChildren: boolean;
-  path: string[];
-  resultType?: 'group' | 'room';
-}
-
-function HighlightMatch({ text, search }: { text: string; search: string }) {
-  if (!search) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(search.toLowerCase());
-  if (idx === -1) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark>{text.slice(idx, idx + search.length)}</mark>
-      {text.slice(idx + search.length)}
-    </>
-  );
-}
-
 export default function TreeView({ onSelectSchedule }: TreeViewProps) {
-  const [nodes, setNodes] = useState<TreeNodeState[]>([]);
+  const [path, setPath] = useState<TreeNode[]>([]);
+  const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const cache = useRef(new Map<string, TreeNode[]>());
+  const parent = path.at(-1);
+  const branch = parent?.id;
   useEffect(() => {
-    loadFaculties();
-  }, []);
-
-  // Debounced server-side search
-  useEffect(() => {
-    if (searchTerm.length < 2) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setSearchResults([]);
-    setSearchLoading(true);
-    const timer = setTimeout(async () => {
+    let active = true;
+    const key = branch || 'faculties';
+    async function load() {
+      setLoading(true); setError(false);
       try {
-        const [treeIndex, roomResults] = await Promise.all([
-          fetchTreeIndex(controller.signal) as Promise<SearchResult[]>,
-          searchPlans(searchTerm, 'room', controller.signal).catch(() => []),
-        ]);
-        if (controller.signal.aborted) return;
-        const term = searchTerm.toLowerCase();
-        const groups = treeIndex
-          .filter(node => {
-            if (node.name.toLowerCase().includes(term)) return true;
-            // Match path excluding top-level faculty name to avoid false positives
-            const pathWithoutFaculty = node.path.slice(1);
-            return pathWithoutFaculty.some(p => p.toLowerCase().includes(term));
-          })
-          .filter(node => node.scheduleType)
-          .sort((a, b) => {
-            // Prioritize direct name matches over path-only matches
-            const aName = a.name.toLowerCase().includes(term) ? 0 : 1;
-            const bName = b.name.toLowerCase().includes(term) ? 0 : 1;
-            if (aName !== bName) return aName - bName;
-            return a.name.localeCompare(b.name, 'pl');
-          })
-          .slice(0, 40)
-          .map(node => ({ ...node, resultType: 'group' as const }));
-        const rooms: SearchResult[] = roomResults.map(room => ({
-          id: room.id,
-          name: room.name,
-          type: 'schedule' as const,
-          scheduleType: room.scheduleType,
-          hasChildren: false,
-          path: ['Sale'],
-          resultType: 'room' as const,
-        }));
-        const roomLikeQuery = /^[a-z]\s*\d/i.test(searchTerm) || /\d/.test(searchTerm);
-        setSearchResults((roomLikeQuery ? [...rooms, ...groups] : [...groups, ...rooms]).slice(0, 50));
-      } catch (err) {
-        if (!controller.signal.aborted) console.error('Search failed:', err);
-      } finally {
-        if (!controller.signal.aborted) setSearchLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [searchTerm]);
-
-  async function loadFaculties() {
-    try {
-      setLoading(true);
-      const faculties = await fetchFaculties();
-      setNodes(faculties.map((f: TreeNode) => ({ ...f, children: [], isExpanded: false })));
-      setError(null);
-    } catch (err) {
-      setError('Nie udało się wczytać wydziałów');
-      console.error(err);
-    } finally {
-      setLoading(false);
+        const result = cache.current.get(key) ?? await (branch ? fetchTreeBranch(branch) : fetchFaculties()) as TreeNode[];
+        if (!active) return;
+        cache.current.set(key, result); setNodes(result);
+      } catch { if (active) setError(true); }
+      finally { if (active) setLoading(false); }
     }
-  }
-
-  const toggleNode = useCallback(async (nodeId: string) => {
-    setNodes(prevNodes => {
-      const updateNodes = (nodes: TreeNodeState[], targetId: string): TreeNodeState[] => {
-        return nodes.map(node => {
-          if (node.id === targetId) {
-            if (node.isExpanded) {
-              return { ...node, isExpanded: false };
-            }
-            return { ...node, isExpanded: true, isLoading: true };
-          }
-          if (node.children && node.children.length > 0) {
-            return { ...node, children: updateNodes(node.children, targetId) };
-          }
-          return node;
-        });
-      };
-      return updateNodes(prevNodes, nodeId);
-    });
-
-    try {
-      const children = await fetchTreeBranch(nodeId);
-      setNodes(prevNodes => {
-        const updateNodes = (nodes: TreeNodeState[], targetId: string): TreeNodeState[] => {
-          return nodes.map(node => {
-            if (node.id === targetId) {
-              return {
-                ...node,
-                children: children.map((c: TreeNode) => ({ ...c, children: [], isExpanded: false })),
-                isLoading: false
-              };
-            }
-            if (node.children && node.children.length > 0) {
-              return { ...node, children: updateNodes(node.children, targetId) };
-            }
-            return node;
-          });
-        };
-        return updateNodes(prevNodes, nodeId);
-      });
-    } catch (err) {
-      console.error('Failed to load children:', err);
-    }
-  }, []);
-
-  const handleExpandClick = useCallback((e: React.MouseEvent, nodeId: string) => {
-    e.stopPropagation();
-    toggleNode(nodeId);
-  }, [toggleNode]);
-
-  const handleScheduleClick = useCallback((e: React.MouseEvent, node: TreeNodeState, path: string[]) => {
-    e.stopPropagation();
-    if (node.type === 'schedule' && node.scheduleType) {
-      onSelectSchedule(node.scheduleType, node.id, node.name, [...path, node.name]);
-    }
-  }, [onSelectSchedule]);
-
-  const handleNodeClick = useCallback((node: TreeNodeState, path: string[]) => {
-    if (node.hasChildren) {
-      toggleNode(node.id);
-    } else if (node.type === 'schedule' && node.scheduleType) {
-      onSelectSchedule(node.scheduleType, node.id, node.name, [...path, node.name]);
-    }
-  }, [onSelectSchedule, toggleNode]);
-
-  const handleSearchResultClick = useCallback((result: SearchResult) => {
-    if (result.scheduleType) {
-      onSelectSchedule(result.scheduleType, result.id, result.name, result.path);
-      setSearchTerm('');
-      setSearchResults([]);
-    }
-  }, [onSelectSchedule]);
-
-  const renderNode = (node: TreeNodeState, depth: number = 0, path: string[] = []): React.ReactNode => {
-    const currentPath = [...path, node.name];
-    const isHybrid = node.type === 'schedule' && node.hasChildren;
-    const isPureSchedule = node.type === 'schedule' && !node.hasChildren;
-
-    return (
-      <div key={node.id} className="tree-node">
-        <div
-          className={`tree-node-content ${isPureSchedule ? 'schedule-item' : ''} ${isHybrid ? 'hybrid-item' : ''}`}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => handleNodeClick(node, path)}
-          aria-expanded={node.hasChildren ? node.isExpanded : undefined}
-          role={node.hasChildren ? 'treeitem' : undefined}
-        >
-          {node.hasChildren && (
-            <span
-              className={`expand-icon ${node.isExpanded ? 'expanded' : ''}`}
-              onClick={(e) => handleExpandClick(e, node.id)}
-            >
-              {node.isLoading ? <LoaderIcon size={12} /> : <ChevronRightIcon size={14} />}
-            </span>
-          )}
-          <span className="node-icon">
-            {node.type === 'faculty' && <BuildingIcon size={15} />}
-            {node.type === 'branch' && <FolderIcon size={15} />}
-            {node.type === 'schedule' && !isHybrid && <CalendarIcon size={15} />}
-            {isHybrid && <FolderIcon size={15} />}
-          </span>
-          <span className="node-name">
-            {node.name}
-          </span>
-          {isHybrid && (
-            <button
-              className="schedule-btn"
-              aria-label={`Pokaz plan: ${node.name}`}
-              onClick={(e) => handleScheduleClick(e, node, path)}
-            >
-              <CalendarIcon size={14} />
-            </button>
-          )}
-        </div>
-        {node.isExpanded && node.children && (
-          <div className="tree-children" role="group">
-            {node.children.map(child => renderNode(child, depth + 1, currentPath))}
-          </div>
-        )}
-      </div>
-    );
+    void load();
+    return () => { active = false; };
+  }, [branch, retry]);
+  const select = (node: TreeNode) => {
+    if (node.scheduleType) onSelectSchedule(node.scheduleType, node.id, node.name, [...path.map(p => p.name), node.name]);
   };
-
-  const isSearchActive = searchTerm.length >= 2;
-
-  if (loading) {
-    return <div className="tree-loading">Ladowanie wydzialow...</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="tree-error">
-        <p>{error}</p>
-        <button onClick={loadFaculties}>Sprobuj ponownie</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="tree-view" role="tree">
-      <div className="tree-search">
-        <SearchIcon size={14} className="tree-search-icon" />
-        <input
-          type="text"
-          placeholder="Szukaj grupy lub sali..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          aria-label="Szukaj grupy lub sali"
-        />
-        {searchTerm && (
-          <button
-            className="tree-search-clear"
-            onClick={() => { setSearchTerm(''); setSearchResults([]); }}
-            aria-label="Wyczysc wyszukiwanie"
-          >
-            <XIcon size={14} />
-          </button>
-        )}
-      </div>
-      <div className="tree-nodes">
-        {isSearchActive ? (
-          searchLoading && searchResults.length === 0 ? (
-            <div className="search-loading">
-              <LoaderIcon size={16} />
-              <span>Wyszukiwanie...</span>
-            </div>
-          ) : searchResults.length > 0 ? (
-            <div className="search-results">
-              {searchResults.map(result => (
-                <div
-                  key={`${result.resultType ?? 'group'}-${result.id}`}
-                  className="search-result"
-                  onClick={() => handleSearchResultClick(result)}
-                >
-                  <span className="search-result-path">
-                    {result.resultType === 'room' ? 'Sala' : result.path.slice(0, -1).join(' \u203A ')}
-                  </span>
-                  <span className="search-result-name">
-                    {result.resultType === 'room' ? <MapPinIcon size={14} /> : <CalendarIcon size={14} />}
-                    <HighlightMatch text={result.name} search={searchTerm} />
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="tree-no-results">
-              <p>Brak wynikow dla "{searchTerm}"</p>
-            </div>
-          )
-        ) : (
-          nodes.map(node => renderNode(node))
-        )}
-      </div>
-    </div>
-  );
+  return <div className="tree-view" data-shortcuts-blocked>
+    {parent && <div className="catalog-navigation"><button type="button" className="text-button" onClick={() => setPath(p => p.slice(0, -1))}><ChevronLeftIcon size={17} />Wstecz</button>
+      <button type="button" className="text-button" onClick={() => setPath([])}>Wydziały</button></div>}
+    <h3 className="catalog-title">{parent?.name || 'Wybierz wydział'}</h3>
+    {path.length > 1 && <p className="catalog-path">{path.slice(0, -1).map(p => p.name).join(' › ')}</p>}
+    {loading ? <p className="catalog-status" role="status">Wczytywanie…</p>
+      : error ? <div className="catalog-status" role="alert"><p>Nie udało się pobrać listy.</p><button type="button" className="secondary-button" onClick={() => setRetry(n => n + 1)}>Spróbuj ponownie</button></div>
+      : nodes.length ? <ul className="catalog-list">{nodes.map(node => <li key={node.id}>
+        <button type="button" className="catalog-item" onClick={() => node.hasChildren ? setPath(p => [...p, node]) : select(node)}>
+          {node.type === 'faculty' ? <BuildingIcon size={18} /> : node.hasChildren ? <FolderIcon size={18} /> : <CalendarIcon size={18} />}
+          <span>{node.name}</span>{node.hasChildren && <ChevronRightIcon size={17} />}
+        </button>
+        {node.hasChildren && node.scheduleType && <button type="button" className="catalog-whole" onClick={() => select(node)}>Otwórz plan: {node.name}</button>}
+      </li>)}</ul> : <p className="catalog-status">Brak planów na tym poziomie. Wróć do poprzedniej listy.</p>}
+  </div>;
 }
