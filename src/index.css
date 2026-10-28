@@ -72,6 +72,15 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; width: 100%; height: 100%; }
+/* Scroll inside views, keeping the PWA shell anchored during iOS overscroll. */
+html, body { overflow: hidden; overscroll-behavior: none; }
+#root { position: fixed; inset: 0; height: auto; overflow: hidden; }
+/* Installed apps have no browser toolbar. iOS can shorten the fixed viewport
+   by the status-bar height, so size the shell to the large viewport instead. */
+@media (display-mode: standalone) {
+  html, body { height: 100vh; height: 100lvh; }
+  #root { position: absolute; bottom: auto; height: 100vh; height: 100lvh; }
+}
 body { background: var(--bg-primary); color: var(--text-primary); font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; }
 button, a, input, summary { -webkit-tap-highlight-color: transparent; }

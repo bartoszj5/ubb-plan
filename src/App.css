@@ -1,4 +1,4 @@
-.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+.app { display: flex; flex-direction: column; height: 100%; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 .skip-to-content { position: fixed; top: -100px; left: 16px; z-index: 1000; background: var(--accent); color: var(--accent-foreground); padding: 12px 18px; border-radius: 8px; }
 .skip-to-content:focus { top: calc(12px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); }
 .app-header { height: 60px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 28px; background: var(--header-bg); border-bottom: 1px solid var(--header-border); }
