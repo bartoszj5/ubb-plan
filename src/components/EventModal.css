@@ -27,4 +27,4 @@
 .detail-error { padding: 12px; background: var(--notice-bg); color: var(--notice-color); border: 1px solid var(--notice-border); border-radius: 8px; font-size: 14px; line-height: 1.6; margin-top: 16px; }
 .detail-description { white-space: pre-wrap; }
 .remote-label { font-weight: 600; }
-@media (max-width: 768px) { .event-dialog { align-items: flex-end; padding: 0; } .event-dialog .dialog-panel { max-width: 100%; max-height: 88dvh; border-radius: 18px 18px 0 0; } .event-details { padding: 0 20px max(24px, env(safe-area-inset-bottom)); } }
+@media (max-width: 768px) { .event-dialog { align-items: flex-end; padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); } .event-dialog .dialog-panel { max-width: 100%; max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top))); border-radius: 18px 18px 0 0; } .event-details { padding: 0 20px max(24px, env(safe-area-inset-bottom)); } }
