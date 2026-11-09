@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseICS, parseScheduleHTMLMeta, attachScheduleNotices } from './parsers.js';
+import { parseICS, parseScheduleHTMLMeta, attachScheduleNotices, parseGroupTitle } from './parsers.js';
 
 // Shape and content of the UBB English lesson and notice on 7 October 2026.
 const html = `
@@ -131,4 +131,17 @@ test('ICS unfolds and decodes text without changing floating or UTC times', () =
   assert.equal(event.start, '2026-10-07T16:30:00');
   assert.equal(event.description, 'Zmiana\nSala L325, wejście B; parter');
   assert.equal(parseICS(icsEvent(lesson))[0].start, '2026-10-07T14:30:00Z');
+});
+
+test('group titles keep the semester code that whole-semester breadcrumbs leave out', () => {
+  const page = (crumbs, code) => `<div class=title style=" width: 765px;" >\r\n Grupy \\ ${crumbs} \r\n </div></div>`
+    + `<div style="position: absolute;"><div class="title">\r\n Plan zajęć - ${code}, tydzień 09.11-15.11, rok 2026/2027</div>`;
+  const base = 'Wydział Budowy Maszyn i Informatyki \\ Niestacjonarne Wieczorowe \\ Automatyka i robotyka NW';
+  assert.deepEqual(parseGroupTitle(page(base, 'AiR/NW/1sem'), '2'), {
+    name: 'AiR/NW/1sem',
+    path: ['Wydział Budowy Maszyn i Informatyki', 'Niestacjonarne Wieczorowe', 'Automatyka i robotyka NW', 'AiR/NW/1sem'],
+  });
+  const group = parseGroupTitle(page(`${base} \\ AiR/NW/5sem \\ AiR/NW/5sem/1gr/a`, 'AiR/NW/5sem/1gr/a'), '0');
+  assert.equal(group.name, 'AiR/NW/5sem/1gr/a');
+  assert.equal(group.path.length, 5);
 });

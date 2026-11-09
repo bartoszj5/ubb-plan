@@ -102,12 +102,14 @@ export function parseGroupTitle(html, type) {
   const path = parts.slice(1);
   let name = path.length > 0 ? path[path.length - 1] : raw;
 
+  const heading = html.match(/Plan zaj[^-]*-\s*([^,<]+)/)?.[1].trim();
   // For teacher pages (type=10), extract the actual name from the heading
   if (String(type) === '10') {
-    const teacherMatch = html.match(/Plan zaj[^-]*-\s*([^,<]+)/);
-    if (teacherMatch) {
-      name = teacherMatch[1].trim();
-    }
+    if (heading) name = heading;
+  } else if (heading && /^[^/]+(?:\/[^/]+)+$/.test(heading) && heading !== name) {
+    // Whole-semester plans stop the breadcrumb at the field of study, so 1sem, 2sem... would share one name.
+    name = heading;
+    path.push(heading);
   }
 
   return { name, path };

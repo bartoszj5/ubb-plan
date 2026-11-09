@@ -16,6 +16,7 @@ import { saveGroupMeta, getGroupMeta } from './utils/groupMeta';
 import { getMyPlan, setMyPlan, getRecentPlans, recordRecentPlan, planKey, PLANS_CHANGED, getPlanPresentation, getPlanView, savePlanView } from './utils/plans';
 import { addDays, dateKey, getWeekStart, getUBBWeekNumber } from './utils/schedule';
 import { readStorage, writeStorage } from './utils/storage';
+import { setPageMeta, DEFAULT_TITLE, DEFAULT_DESCRIPTION } from './utils/seo';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import Notices from './components/Notices';
 import PWAUpdatePrompt from './components/PWAUpdatePrompt';
@@ -25,6 +26,7 @@ interface Library { favorites: FavoriteGroup[]; recent: FavoriteGroup[]; myPlan:
 function readLibrary(): Library { return { favorites: getFavorites(), recent: getRecentPlans(), myPlan: getMyPlan() }; }
 
 function WelcomeScreen({ library, onSelect, onBrowse }: { library: Library; onSelect: (plan: FavoriteGroup) => void; onBrowse: () => void }) {
+  useEffect(() => { setPageMeta({ title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, path: '/' }); }, []);
   if (library.myPlan) return <Navigate to={`/plan/${library.myPlan.scheduleType}/${library.myPlan.id}`} replace />;
   return <div className="welcome-screen"><div className="welcome-content">
     <div className="welcome-mark"><CalendarIcon size={28} /></div><h1>Znajdź swój plan.</h1>
@@ -55,6 +57,21 @@ function SchedulePage({ type, id, library, onSearch, onReturn, targetDate }: Sch
   const groupPath = meta?.path ?? [];
   const favorite = library.favorites.find(p => planKey(p) === key);
   const currentPlan: FavoriteGroup = { id, scheduleType: type, name: groupName, path: groupPath };
+
+  useEffect(() => {
+    const path = `/plan/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+    if (!meta) { setPageMeta({ title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, path }); return; }
+    const { title, subtitle } = getPlanPresentation(meta.name, meta.path, type);
+    const where = meta.path.length ? ` (${meta.path[0]})` : '';
+    // Raw codes like "AiR/NW/5sem/1gr/a" mean little in search results, so name the field of study next to them.
+    const field = meta.path.find(p => !p.includes('/') && /\s(?:S|NZ|NW)$/.test(p));
+    const detail = field && !title.startsWith(field.replace(/\s(?:S|NZ|NW)$/, '')) ? field : subtitle;
+    setPageMeta({
+      title: `${title} · ${detail} - plan zajęć UBB`,
+      description: `Aktualny plan zajęć: ${title}, ${detail === subtitle ? subtitle : `${detail}, ${subtitle}`}${where}. Tygodniowy harmonogram Uniwersytetu Bielsko-Bialskiego z salami i prowadzącymi.`,
+      path,
+    });
+  }, [type, id, meta]);
 
   useEffect(() => {
     const cached = getGroupMeta(id, type);
